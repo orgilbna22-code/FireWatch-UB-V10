@@ -10,3 +10,5 @@ data/
 *.log
 .env*
 !.env.example
+
+dist-server/
