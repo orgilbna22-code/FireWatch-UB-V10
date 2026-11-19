@@ -767,7 +767,7 @@ async function start() {
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.join(__dirname, 'dist');
+    const distDir = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distDir));
     app.use((req, res, next) => {
       if (req.path.startsWith('/api')) return next();
