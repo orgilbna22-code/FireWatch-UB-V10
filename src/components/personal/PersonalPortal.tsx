@@ -548,7 +548,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
               <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block">
                 {language === 'mn' ? 'ХУВИЙН ПОРТАЛ & ВЭБСАЙТ' : 'PERSONAL PORTAL & CREATOR'}
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-white/10 font-mono text-[10px] text-white/90">
+              <span className="px-2.5 py-0.5 rounded-full bg-white/10 font-mono text-xs text-white/90">
                 FIREWATCH UB
               </span>
             </div>
@@ -608,7 +608,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
               
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs space-y-6">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold block mb-1">
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#C93B17] font-bold block mb-1">
                     {isMn ? 'АЛХАМ 1' : 'STEP 1'}
                   </span>
                   <h3 className="font-editorial text-2xl font-bold text-[#0B124D]">
@@ -633,7 +633,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         const khoroos = getKhoroosByDistrict(e.target.value);
                         if (khoroos.length > 0) setKhorooNumber(khoroos[0].khorooNumber);
                       }}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/[0.1] bg-[#F7F8FA] text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-2 focus:ring-[#FF633C]"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/[0.1] bg-[#F7F8FA] text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-2 focus:ring-[#FF633C] min-h-[44px]"
                     >
                       {UB_DISTRICTS.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -652,7 +652,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     <select
                       value={khorooNumber}
                       onChange={(e) => setKhorooNumber(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/[0.1] bg-[#F7F8FA] text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-2 focus:ring-[#FF633C]"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/[0.1] bg-[#F7F8FA] text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-2 focus:ring-[#FF633C] min-h-[44px]"
                     >
                       {availableKhoroos.map((kh) => (
                         <option key={kh.id} value={kh.khorooNumber}>
@@ -667,7 +667,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
               {/* Step 2: Dwelling & Heating Details */}
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs space-y-6">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold block mb-1">
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#C93B17] font-bold block mb-1">
                     {isMn ? 'АЛХАМ 2' : 'STEP 2'}
                   </span>
                   <h3 className="font-editorial text-2xl font-bold text-[#0B124D]">
@@ -691,7 +691,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         key={t.id}
                         type="button"
                         onClick={() => setHomeType(t.id as any)}
-                        className={`p-3 rounded-2xl border text-center transition-all ${
+                        className={`p-3 rounded-2xl border text-center transition-all min-h-[44px] ${
                           homeType === t.id
                             ? 'bg-[#0B124D] text-white border-[#0B124D] font-bold shadow-xs'
                             : 'bg-[#F7F8FA] text-[#72778A] border-black/[0.06] hover:bg-slate-100'
@@ -720,7 +720,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         key={h.id}
                         type="button"
                         onClick={() => setHeatingType(h.id as any)}
-                        className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        className={`p-2.5 rounded-2xl border text-left transition-all min-h-[44px] ${
                           heatingType === h.id
                             ? 'bg-[#FF633C] text-white border-[#FF633C] font-bold shadow-xs'
                             : 'bg-[#F7F8FA] text-[#72778A] border-black/[0.06] hover:bg-slate-100'
@@ -747,7 +747,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         key={el.id}
                         type="button"
                         onClick={() => setElectricalState(el.id as 'safe' | 'medium' | 'overloaded')}
-                        className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        className={`p-2.5 rounded-2xl border text-left transition-all min-h-[44px] ${
                           electricalState === el.id
                             ? 'bg-[#0B124D] text-white border-[#0B124D] font-bold shadow-xs'
                             : 'bg-[#F7F8FA] text-[#72778A] border-black/[0.06] hover:bg-slate-100'
@@ -775,7 +775,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                           key={a.id}
                           type="button"
                           onClick={() => setAshStorage(a.id as any)}
-                          className={`p-2.5 rounded-2xl border text-left transition-all ${
+                          className={`p-2.5 rounded-2xl border text-left transition-all min-h-[44px] ${
                             ashStorage === a.id
                               ? 'bg-[#0B124D] text-white border-[#0B124D] font-bold'
                               : 'bg-[#F7F8FA] text-[#72778A] border-black/[0.06]'
@@ -792,7 +792,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
               {/* Step 3: Safety Equipment & Family Vulnerability */}
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs space-y-6">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold block mb-1">
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#C93B17] font-bold block mb-1">
                     {isMn ? 'АЛХАМ 3' : 'STEP 3'}
                   </span>
                   <h3 className="font-editorial text-2xl font-bold text-[#0B124D]">
@@ -805,7 +805,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     type="button"
                     aria-pressed={hasSmokeDetector}
                     onClick={() => setHasSmokeDetector(!hasSmokeDetector)}
-                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
+                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all min-h-[44px] ${
                       hasSmokeDetector
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
                         : 'bg-[#F7F8FA] border-black/[0.06] text-[#72778A]'
@@ -815,7 +815,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <span className="text-xl">🚨</span>
                       <div>
                         <span>{isMn ? 'Утаа мэдрэгчтэй' : 'Smoke detector'}</span>
-                        <span className="text-[10px] block opacity-75 font-normal">
+                        <span className="text-xs block font-normal">
                           {isMn ? 'Индексийг 8 оноо бууруулна' : 'Reduces index by 8 pts'}
                         </span>
                       </div>
@@ -827,7 +827,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     type="button"
                     aria-pressed={hasFireExtinguisher}
                     onClick={() => setHasFireExtinguisher(!hasFireExtinguisher)}
-                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
+                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all min-h-[44px] ${
                       hasFireExtinguisher
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
                         : 'bg-[#F7F8FA] border-black/[0.06] text-[#72778A]'
@@ -837,7 +837,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <span className="text-xl">🧯</span>
                       <div>
                         <span>{isMn ? 'Гал унтраагууртай' : 'Fire extinguisher'}</span>
-                        <span className="text-[10px] block opacity-75 font-normal">
+                        <span className="text-xs block font-normal">
                           {isMn ? 'Индексийг 7 оноо бууруулна' : 'Reduces index by 7 pts'}
                         </span>
                       </div>
@@ -849,7 +849,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     type="button"
                     aria-pressed={hasChildren}
                     onClick={() => setHasChildren(!hasChildren)}
-                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
+                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all min-h-[44px] ${
                       hasChildren
                         ? 'bg-orange-50 border-orange-200 text-[#0B124D] font-bold'
                         : 'bg-[#F7F8FA] border-black/[0.06] text-[#72778A]'
@@ -859,7 +859,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <span className="text-xl">👶</span>
                       <div>
                         <span>{isMn ? '0-7 насны бага хүүхэдтэй' : 'Child aged 0-7 in the home'}</span>
-                        <span className="text-[10px] block opacity-75 font-normal">
+                        <span className="text-xs block font-normal">
                           {isMn ? 'Зуухны хамгаалалт шаардлагатай' : 'Needs a stove guard'}
                         </span>
                       </div>
@@ -871,7 +871,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     type="button"
                     aria-pressed={hasElderly}
                     onClick={() => setHasElderly(!hasElderly)}
-                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
+                    className={`w-full text-left p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all min-h-[44px] ${
                       hasElderly
                         ? 'bg-orange-50 border-orange-200 text-[#0B124D] font-bold'
                         : 'bg-[#F7F8FA] border-black/[0.06] text-[#72778A]'
@@ -881,7 +881,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <span className="text-xl">👵</span>
                       <div>
                         <span>{isMn ? '65+ насны өндөр настантай' : 'Elder aged 65+ in the home'}</span>
-                        <span className="text-[10px] block opacity-75 font-normal">
+                        <span className="text-xs block font-normal">
                           {isMn ? 'Шуурхай аврах төлөвлөгөө хэрэгтэй' : 'Needs an assisted escape plan'}
                         </span>
                       </div>
@@ -899,7 +899,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
               {/* Personal Risk Result Card */}
               <div className="bg-[#0B124D] text-white p-6 sm:p-8 rounded-3xl shadow-xl space-y-6 border border-white/10 relative overflow-hidden">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold">
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#FF8C6E] font-bold">
                     {isMn ? 'ТАНЫ ХУВИЙН ҮНЭЛГЭЭ' : 'YOUR PERSONAL VERDICT'}
                   </span>
                   <span className={`px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ${
@@ -920,11 +920,11 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     <span className="font-mono text-5xl sm:text-6xl font-bold tracking-tight text-white tabular-nums">
                       {personalRisk.score}
                     </span>
-                    <span className="text-sm font-mono text-white/70">
+                    <span className="text-sm font-mono text-white/80">
                       / 100 · {isMn ? 'хувийн эрсдэлийн индекс' : 'personal risk index'}
                     </span>
                   </div>
-                  <p className="text-xs text-white/80 mt-2 leading-relaxed">
+                  <p className="text-xs text-white/85 mt-2 leading-relaxed">
                     {isMn
                       ? `Энэ үзүүлэлт нь ${
                           selectedKhorooData
@@ -935,7 +935,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                           selectedKhorooData ? selectedKhorooData.nameEn : selectedDistrictData.nameEn
                         }, your dwelling, heating, equipment, and weather (not an ignition probability %).`}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-white/60 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-white/80 mt-2">
                     <span className="flex items-center gap-1">
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
@@ -960,13 +960,13 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       {live.tempCelsius}°C · {isMn ? 'чийгшил' : 'RH'} {live.humidityPercent}% ·{' '}
                       {live.windSpeedKmh} {isMn ? 'км/ц' : 'km/h'}
                     </span>
-                    <span className="text-[#FF633C] font-bold">FWI {live.fireWeatherIndex}</span>
+                    <span className="text-[#FF8C6E] font-bold">FWI {live.fireWeatherIndex}</span>
                   </div>
                 </div>
 
                 {/* Factors List */}
                 <div className="space-y-2 pt-4 border-t border-white/10">
-                  <span className="text-[11px] font-mono text-white/60 uppercase block">
+                  <span className="text-xs font-mono text-white/80 uppercase block">
                     {isMn ? 'БҮРДҮҮЛЭГЧ ХҮЧИН ЗҮЙЛСИЙН ЖАГСААЛТ:' : 'CONTRIBUTING FACTORS:'}
                   </span>
                   {personalRisk.breakdown.map((item) => (
@@ -978,12 +978,12 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         <span className="font-semibold text-white/95 block">
                           {isMn ? item.labelMn : item.labelEn}
                         </span>
-                        <span className="text-[10px] text-white/60">
+                        <span className="text-xs text-white/80">
                           {(isMn ? item.reasonMn : item.reasonEn) ?? item.reasonMn}
                         </span>
                       </div>
                       <span className={`font-mono text-xs font-bold shrink-0 ${
-                        item.pts < 0 ? 'text-emerald-400' : 'text-[#FF633C]'
+                        item.pts < 0 ? 'text-emerald-300' : 'text-[#FF8C6E]'
                       }`}>
                         {item.pts > 0 ? `+${item.pts}` : `${item.pts}`} {isMn ? 'оноо' : 'pts'}
                       </span>
@@ -997,7 +997,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     type="button"
                     onClick={handleSaveAudit}
                     disabled={isSavingAudit}
-                    className="w-full py-2.5 bg-white text-[#0B124D] hover:bg-slate-100 disabled:opacity-60 text-xs font-bold rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-white text-[#0B124D] hover:bg-slate-100 disabled:opacity-60 text-xs font-bold rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 min-h-[44px]"
                   >
                     <span>💾</span>
                     <span>
@@ -1009,7 +1009,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     </span>
                   </button>
                   {apiHealth.status === 'unavailable' && (
-                    <p className="text-[11px] text-amber-200/90 text-center">
+                    <p className="text-xs text-amber-200 text-center">
                       {isMn
                         ? 'Энэ демо хувилбарт AI тайлбар болон хадгалалт идэвхгүй.'
                         : 'Server saving is disabled in this demo (browser draft only).'}
@@ -1017,7 +1017,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   )}
                   {saveMessage && (
                     <div
-                      className={`text-[11px] font-mono text-center flex flex-wrap items-center justify-center gap-2 ${
+                      className={`text-xs font-mono text-center flex flex-wrap items-center justify-center gap-2 ${
                         saveMessage.tone === 'ok'
                           ? 'text-emerald-300'
                           : saveMessage.tone === 'warn'
@@ -1030,7 +1030,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                         <button
                           type="button"
                           onClick={handleSaveAudit}
-                          className="underline font-bold text-white"
+                          className="underline font-bold text-white min-h-[44px] px-2"
                         >
                           {isMn ? 'Дахин оролдох' : 'Retry'}
                         </button>
@@ -1041,7 +1041,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   {onExploreMap && (
                     <button
                       onClick={() => (onSelectDistrict ? onSelectDistrict(districtId) : onExploreMap())}
-                      className="w-full py-3 bg-[#FF633C] hover:bg-[#ff5122] text-white text-xs font-bold rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-[#FF633C] hover:bg-[#ff5122] text-white text-xs font-bold rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 min-h-[44px]"
                     >
                       <span>🗺️</span>
                       <span>{isMn ? 'Энэ байршлыг газрын зураг дээр шалгах' : 'Inspect this location on the map'}</span>
@@ -1059,7 +1059,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <h4 className="font-bold text-sm text-[#0B124D]">
                         {isMn ? 'Гэр бүлийн хувийн аврах хуудас' : 'Family escape card'}
                       </h4>
-                      <span className="text-[10px] text-[#72778A]">
+                      <span className="text-xs text-[#72778A]">
                         {isMn
                           ? 'Хэвлэж аваад хаалга эсвэл хөргөгч дээрээ наана уу'
                           : 'Print it and stick it on a door or fridge'}
@@ -1069,8 +1069,9 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
 
                   <button
                     onClick={handlePrintCard}
-                    className="print:hidden p-2 bg-slate-100 hover:bg-slate-200 text-[#0B124D] rounded-xl text-xs font-semibold transition-colors"
+                    className="print:hidden w-11 h-11 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-[#0B124D] rounded-xl text-sm font-semibold transition-colors shrink-0"
                     title={isMn ? 'Хэвлэх' : 'Print'}
+                    aria-label={isMn ? 'Хэвлэх' : 'Print'}
                   >
                     🖨️
                   </button>
@@ -1078,46 +1079,46 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
 
                 <div className="space-y-3 bg-[#F7F8FA] p-4 rounded-2xl text-xs border border-black/[0.04]">
                   <div>
-                    <span className="text-[#72778A] block text-[10px] uppercase font-mono">
+                    <span className="text-[#72778A] block text-xs uppercase font-mono">
                       {isMn ? 'Гэр бүлийн уулзах цэг (Muster Point):' : 'Family meeting point:'}
                     </span>
                     <input
                       type="text"
                       value={customMeetingPoint}
                       onChange={(e) => setCustomMeetingPoint(e.target.value)}
-                      className="w-full mt-1 px-3 py-1.5 bg-white border border-black/[0.08] rounded-xl text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-1 focus:ring-[#FF633C]"
+                      className="w-full mt-1 px-3 py-2 bg-white border border-black/[0.08] rounded-xl text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-1 focus:ring-[#FF633C] min-h-[44px]"
                     />
                   </div>
 
                   <div>
-                    <span className="text-[#72778A] block text-[10px] uppercase font-mono">
+                    <span className="text-[#72778A] block text-xs uppercase font-mono">
                       {isMn ? 'Яаралтай холбоо барих утас:' : 'Emergency contact:'}
                     </span>
                     <input
                       type="text"
                       value={emergencyPhone}
                       onChange={(e) => handleEmergencyPhoneChange(e.target.value)}
-                      className="w-full mt-1 px-3 py-1.5 bg-white border border-black/[0.08] rounded-xl text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-1 focus:ring-[#FF633C]"
+                      className="w-full mt-1 px-3 py-2 bg-white border border-black/[0.08] rounded-xl text-xs font-semibold text-[#0B124D] focus:outline-none focus:ring-1 focus:ring-[#FF633C] min-h-[44px]"
                     />
-                    <span className="text-[10px] text-[#72778A] block mt-1">
+                    <span className="text-xs text-[#72778A] block mt-1">
                       {isMn
                         ? 'Зөвхөн таны энэ төхөөрөмжийн хөтөч дээр хадгалагдана (серверт хадгалахгүй).'
                         : 'Stored locally in your browser only (never saved on the server).'}
                     </span>
                   </div>
 
-                  <div className="pt-2 border-t border-black/[0.06] grid grid-cols-2 gap-2 text-center font-mono text-[11px]">
+                  <div className="pt-2 border-t border-black/[0.06] grid grid-cols-2 gap-2 text-center font-mono text-xs">
                     <a
                       href={`tel:${EMERGENCY_DISPATCH.fire}`}
                       data-print-tone="fire"
-                      className="p-2 bg-red-100 text-red-700 rounded-xl font-bold hover:bg-red-200 transition-colors"
+                      className="p-2.5 bg-red-100 text-red-800 rounded-xl font-bold hover:bg-red-200 transition-colors min-h-[44px] flex items-center justify-center"
                     >
                       {isMn ? `🚒 ${EMERGENCY_DISPATCH.fire} - Гал түймэр` : `🚒 ${EMERGENCY_DISPATCH.fire} - Fire`}
                     </a>
                     <a
                       href={`tel:${EMERGENCY_DISPATCH.ambulance}`}
                       data-print-tone="medical"
-                      className="p-2 bg-amber-100 text-amber-800 rounded-xl font-bold hover:bg-amber-200 transition-colors"
+                      className="p-2.5 bg-amber-100 text-amber-900 rounded-xl font-bold hover:bg-amber-200 transition-colors min-h-[44px] flex items-center justify-center"
                     >
                       {isMn ? `🚑 ${EMERGENCY_DISPATCH.ambulance} - Түргэн тусламж` : `🚑 ${EMERGENCY_DISPATCH.ambulance} - Ambulance`}
                     </a>
@@ -1126,14 +1127,14 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
 
                 <button
                   onClick={handleCopyLink}
-                  className="print:hidden w-full py-2.5 rounded-xl border border-black/[0.08] text-xs font-semibold text-[#0B124D] hover:bg-slate-100 transition-colors"
+                  className="print:hidden w-full py-2.5 rounded-xl border border-black/[0.08] text-xs font-semibold text-[#0B124D] hover:bg-slate-100 transition-colors min-h-[44px]"
                 >
                   {isCopied
                     ? (isMn ? '✓ Холбоос хуулагдлаа!' : '✓ Link copied!')
                     : (isMn ? '🔗 Энэ тооцоолуурыг бусдад хуваалцах' : '🔗 Share this calculator')}
                 </button>
                 {copyError && (
-                  <p className="text-[11px] font-mono text-amber-700 break-all">{copyError}</p>
+                  <p className="text-xs font-mono text-amber-800 break-all">{copyError}</p>
                 )}
               </div>
 
@@ -1143,7 +1144,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   <button
                     type="button"
                     onClick={() => void loadAudits()}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+                    className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-900 hover:bg-amber-100 min-h-[44px]"
                   >
                     {isMn ? 'Дахин оролдох' : 'Retry'}
                   </button>
@@ -1157,7 +1158,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                     <h4 className="font-bold text-sm text-[#0B124D]">
                       {isMn ? 'Хадгалсан үнэлгээнүүд' : 'Saved Home Audits'}
                     </h4>
-                    <span className="text-[10px] font-mono text-[#72778A]">
+                    <span className="text-xs font-mono text-[#72778A]">
                       {savedAudits.length} {isMn ? 'бичлэг' : 'saved'}
                     </span>
                   </div>
@@ -1174,12 +1175,12 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                             <div className="font-bold text-[#0B124D] truncate flex items-center gap-1.5">
                               <span>{dName} · {rec.khorooNumber}-р {isMn ? 'хороо' : 'khoroo'}</span>
                               {rec.localOnly && (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-mono">
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-mono">
                                   {isMn ? 'Зөвхөн хөтөч' : 'Local only'}
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] font-mono text-[#72778A]">
+                            <div className="text-xs font-mono text-[#72778A]">
                               {rec.score}/100 · {rec.createdAtIso.slice(0, 16).replace('T', ' ')}
                             </div>
                           </div>
@@ -1187,7 +1188,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleLoadAudit(rec)}
-                              className="px-2.5 py-1 rounded-lg bg-[#0B124D] text-white text-[10px] font-semibold hover:bg-[#11166B]"
+                              className="px-3 py-2 rounded-lg bg-[#0B124D] text-white text-xs font-semibold hover:bg-[#11166B] min-h-[44px]"
                             >
                               {isMn ? 'Сэргээх' : 'Load'}
                             </button>
@@ -1195,7 +1196,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                               type="button"
                               onClick={() => void handleDeleteAudit(rec)}
                               aria-label={isMn ? 'Устгах' : 'Delete'}
-                              className="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100"
                             >
                               ✕
                             </button>
@@ -1227,7 +1228,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   <span className="font-editorial text-5xl font-bold text-[#FF633C]">
                     O
                   </span>
-                  <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest mt-1">
+                  <span className="text-xs font-mono text-white/80 uppercase tracking-widest mt-1">
                     ENGINEER
                   </span>
                   <div className="absolute inset-0 bg-radial from-[#FF633C]/20 to-transparent pointer-events-none" />
@@ -1236,8 +1237,8 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
 
               {/* Bio & Intro */}
               <div className="flex-1 space-y-3 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 text-[#FF633C] text-xs font-mono font-bold">
-                  <span className="w-2 h-2 rounded-full bg-[#FF633C] animate-pulse" />
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 text-[#C93B17] text-xs font-mono font-bold">
+                  <span className="w-2 h-2 rounded-full bg-[#C93B17] animate-pulse" />
                   <span>CREATOR & SOFTWARE ENGINEER</span>
                 </div>
 
@@ -1255,7 +1256,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   {isEmailShown ? (
                     <a
                       href={`mailto:${getMaintainerEmail()}`}
-                      className="px-5 py-2.5 bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-2xl shadow-md transition-all active:scale-95 flex items-center gap-2"
+                      className="px-5 py-2.5 bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-2xl shadow-md transition-all active:scale-95 flex items-center gap-2 min-h-[44px]"
                     >
                       <span>✉️</span>
                       <span>{getMaintainerEmail()}</span>
@@ -1263,7 +1264,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   ) : (
                     <button
                       onClick={() => setIsEmailShown(true)}
-                      className="px-5 py-2.5 bg-[#0B124D]/8 hover:bg-[#0B124D]/15 text-[#0B124D] text-xs font-bold rounded-2xl transition-all active:scale-95 flex items-center gap-2"
+                      className="px-5 py-2.5 bg-[#0B124D]/8 hover:bg-[#0B124D]/15 text-[#0B124D] text-xs font-bold rounded-2xl transition-all active:scale-95 flex items-center gap-2 min-h-[44px]"
                     >
                       <span>✉️</span>
                       <span>{isMn ? 'Имэйл харуулах' : 'Show email'}</span>
@@ -1280,7 +1281,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
 
             {/* Co-Creators (Student Team) */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#12B89A] font-bold block mb-1">
+              <span className="text-xs font-mono uppercase tracking-widest text-[#0E7A65] font-bold block mb-1">
                 {language === 'mn' ? 'ХАМТРАН БҮТЭЭГЧИД' : 'CO-CREATORS'}
               </span>
               <h3 className="font-editorial text-xl sm:text-2xl font-bold text-[#0B124D] mb-5">
@@ -1301,7 +1302,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                       <div className="font-bold text-sm text-[#0B124D] truncate">
                         {language === 'mn' ? c.nameMn : c.nameEn}
                       </div>
-                      <div className="text-[11px] font-mono text-[#72778A]">
+                      <div className="text-xs font-mono text-[#72778A]">
                         {language === 'mn' ? c.roleMn : c.roleEn}
                       </div>
                     </div>
@@ -1346,7 +1347,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                   ].map((tech) => (
                     <span
                       key={tech}
-                      className="px-2.5 py-1 rounded-xl bg-[#F7F8FA] border border-black/[0.04] text-[11px] font-mono text-[#0B124D] font-semibold"
+                      className="px-2.5 py-1 rounded-xl bg-[#F7F8FA] border border-black/[0.04] text-xs font-mono text-[#0B124D] font-semibold"
                     >
                       {tech}
                     </span>
@@ -1369,7 +1370,7 @@ export const PersonalPortal: React.FC<PersonalPortalProps> = ({
                 <div className="pt-2">
                   <a
                     href={`mailto:${getMaintainerEmail()}`}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF633C] hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C93B17] hover:underline min-h-[44px]"
                   >
                     <span>{isMn ? 'Санал илгээх →' : 'Send a suggestion →'}</span>
                   </a>

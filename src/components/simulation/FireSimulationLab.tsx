@@ -67,10 +67,10 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 sm:pb-8 border-b border-black/[0.06]">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
+              <span className="text-xs font-mono font-bold tracking-widest text-[#C93B17] uppercase">
                 {language === 'mn' ? 'ИНТЕРАКТИВ ЛАБОРАТОРИ' : 'INTERACTIVE FIRE LAB'}
               </span>
-              <span className="text-slate-300">/</span>
+              <span className="text-[#72778A]">/</span>
               <span className="text-xs text-[#72778A]">
                 {language === 'mn' ? 'Салхи ба хуурайшилтын симуляци' : 'Physics & Environment'}
               </span>
@@ -86,7 +86,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={handleToggleSound}
-              className={`px-4 py-2 rounded-2xl text-xs font-mono font-semibold flex items-center gap-2 transition-all shadow-xs ${
+              className={`px-4 py-2.5 rounded-2xl text-xs font-mono font-semibold flex items-center gap-2 transition-all shadow-xs min-h-[44px] ${
                 soundActive
                   ? 'bg-[#FF633C] text-white shadow-md shadow-[#FF633C]/20'
                   : 'bg-[#F7F8FA] hover:bg-slate-200 text-[#0B124D]'
@@ -106,7 +106,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 setWindSpeed(clampWind(live.windSpeedKmh));
                 setHumidity(clampHumidity(live.humidityPercent));
               }}
-              className="px-4 py-2 rounded-2xl text-xs font-mono font-semibold flex items-center gap-2 transition-all shadow-xs bg-[#0B124D]/5 hover:bg-[#0B124D]/12 text-[#0B124D]"
+              className="px-4 py-2.5 rounded-2xl text-xs font-mono font-semibold flex items-center gap-2 transition-all shadow-xs bg-[#0B124D]/5 hover:bg-[#0B124D]/12 text-[#0B124D] min-h-[44px]"
               title={isMn ? 'Одоогийн цаг агаарын утгуудыг ашиглах' : 'Load observed conditions'}
             >
               <span
@@ -119,7 +119,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 }`}
               />
               <span>{isMn ? 'Өнөөдрийн нөхцөл' : 'Use live data'}</span>
-              <span className="text-[#FF633C] font-bold">FWI {live.fireWeatherIndex}</span>
+              <span className="text-[#C93B17] font-bold">FWI {live.fireWeatherIndex}</span>
             </button>
           </div>
         </div>
@@ -141,9 +141,9 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
               }}
             />
 
-            <div className="z-10 w-full flex items-center justify-between text-[11px] font-mono text-white/60">
+            <div className="z-10 w-full flex items-center justify-between text-xs font-mono text-white/80">
               <span>LIVE RENDER</span>
-              <span className="text-[#FF633C] font-bold uppercase">{flameIntensity} MODE</span>
+              <span className="text-[#FF8C6E] font-bold uppercase">{flameIntensity} MODE</span>
             </div>
 
             {/* Canvas Animated Fire */}
@@ -154,7 +154,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 size="lg"
                 interactive={true}
               />
-              <span className="text-[11px] text-white/50 block mt-2 font-mono">
+              <span className="text-xs text-white/80 block mt-2 font-mono">
                 {language === 'mn'
                   ? 'Хулганаараа дөл дээгүүр хөдөлгөж агаарын урсгалыг сорино уу'
                   : 'Hover/move cursor to create aerodynamic turbulence'}
@@ -163,9 +163,9 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
 
             {/* Physical Readout: Ignition vs Wind Spread + Spark Drift */}
             <div className="z-10 w-full space-y-2">
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div className="p-2.5 rounded-xl bg-white/10 border border-white/10 text-left">
-                  <span className="text-white/60 block">
+                  <span className="text-white/80 block">
                     {isMn ? 'Асалтын бэлэн байдал' : 'Ignition receptivity'}
                   </span>
                   <span className="text-sm font-bold text-[#FFD166]">
@@ -173,25 +173,25 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-white/10 border border-white/10 text-left">
-                  <span className="text-white/60 block">
+                  <span className="text-white/80 block">
                     {isMn ? 'Салхины тархалт' : 'Wind spread potential'}
                   </span>
-                  <span className="text-sm font-bold text-[#FF633C]">
+                  <span className="text-sm font-bold text-[#FF8C6E]">
                     {physics.spreadPotential} / 100
                   </span>
                 </div>
               </div>
               <div className="p-3 sm:p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-between text-xs gap-3">
                 <div className="text-left">
-                  <span className="text-[10px] text-white/60 block font-mono">
+                  <span className="text-xs text-white/80 block font-mono">
                     {isMn ? 'Оч үсрэх аюултай зай' : 'Simulated spark drift'}
                   </span>
-                  <span className="font-mono text-lg sm:text-xl font-bold text-[#FF633C]">
+                  <span className="font-mono text-lg sm:text-xl font-bold text-[#FF8C6E]">
                     ~{sparkDriftMeters} {isMn ? 'метр' : 'm'}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-white/60 block font-mono">
+                  <span className="text-xs text-white/80 block font-mono">
                     {language === 'mn' ? 'Тархалтын индекс' : 'Composite Index'}
                   </span>
                   <span className="font-mono text-lg sm:text-xl font-bold text-white">
@@ -225,7 +225,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 aria-label={isMn ? 'Салхины хурд км/ц' : 'Wind speed in km/h'}
                 className="w-full accent-[#FF633C] cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] font-mono text-slate-400">
+              <div className="flex justify-between text-xs font-mono text-[#5C6275]">
                 <span>0 {isMn ? 'км/ц · Намуун' : 'km/h · Calm'}</span>
                 <span>45 {isMn ? 'км/ц · Салхитай' : 'km/h · Breezy'}</span>
                 <span>{WIND_MAX}+ {isMn ? 'км/ц · Шуурга' : 'km/h · Storm'}</span>
@@ -241,7 +241,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 </span>
                 <span
                   className={`font-mono font-bold text-sm ${
-                    humidity <= 35 ? 'text-[#E93B2F]' : 'text-[#12B89A]'
+                    humidity <= 35 ? 'text-[#C82318]' : 'text-[#0E7A65]'
                   }`}
                 >
                   {humidity}%
@@ -254,14 +254,14 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                 value={humidity}
                 onChange={(e) => setHumidity(clampHumidity(Number(e.target.value)))}
                 aria-label={isMn ? 'Агаарын харьцангуй чийгшил хувиар' : 'Relative humidity in percent'}
-                className="w-full accent-[#0B124D] cursor-pointer"
+                className="w-full accent-[#0B124D] cursor-pointer min-h-[44px]"
               />
-              <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                <span className="text-[#E93B2F]">
+              <div className="flex justify-between text-xs font-mono text-[#5C6275]">
+                <span className="text-[#C82318]">
                   {HUM_MIN}% {isMn ? '(Маш хуурай · Аюултай)' : '(Very dry · Hazardous)'}
                 </span>
                 <span>50% {isMn ? '(Хэвийн)' : '(Normal)'}</span>
-                <span className="text-[#12B89A]">
+                <span className="text-[#0E7A65]">
                   {HUM_MAX}% {isMn ? '(Бороотой · Аюулгүй)' : '(Wet · Safe)'}
                 </span>
               </div>
@@ -282,7 +282,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
                   <button
                     key={item.id}
                     onClick={() => setFuelType(item.id as any)}
-                    className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2 font-medium ${
+                    className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2 font-medium min-h-[44px] ${
                       fuelType === item.id
                         ? 'bg-[#0B124D] text-white border-[#0B124D] shadow-sm'
                         : 'bg-[#F7F8FA] text-slate-700 border-slate-200 hover:border-slate-300'
@@ -310,7 +310,7 @@ export const FireSimulationLab: React.FC<FireSimulationLabProps> = ({
             {onExploreMap && (
               <button
                 onClick={onExploreMap}
-                className="w-full py-3 bg-[#0B124D] hover:bg-[#11166B] text-white font-bold text-xs rounded-xl transition-all shadow-md text-center"
+                className="w-full py-3 bg-[#0B124D] hover:bg-[#11166B] text-white font-bold text-xs rounded-xl transition-all shadow-md text-center min-h-[44px]"
               >
                 {language === 'mn' ? 'Бодит дүүргүүдийн газрын зураг дээр харах' : 'Inspect Real UB Districts on Map'} →
               </button>

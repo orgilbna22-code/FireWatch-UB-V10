@@ -76,9 +76,9 @@ class FireSoundEngine {
       whiteNoise.start(0);
       this.noiseNode = whiteNoise;
 
-      // Random micro-pops / ember crackles
+      // Random micro-pops / ember crackles (paused while backgrounded)
       this.intervalId = window.setInterval(() => {
-        if (!this.ctx || !this.isRunning || Math.random() > 0.45) return;
+        if (document.hidden || !this.ctx || !this.isRunning || Math.random() > 0.45) return;
         try {
           const popOsc = this.ctx.createOscillator();
           const popGain = this.ctx.createGain();

@@ -1,14 +1,16 @@
 node_modules/
 build/
 dist/
+dist-server/
 coverage/
+
 /data/
 *.sqlite*
 .aistudio/
 .playwright-cli/
 .DS_Store
 *.log
-.env*
-!.env.example
 
-dist-server/
+.env
+.env.*
+!.env.example

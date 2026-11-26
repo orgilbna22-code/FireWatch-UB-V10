@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
+import { shouldReduceMotionOrData } from '../../utils/motionBudget';
 
 interface FireAnimationProps {
   intensity?: 'low' | 'moderate' | 'high' | 'extreme';
@@ -29,6 +30,7 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
   const mouseDraftRef = useRef(0);
   const clickFlutterRef = useRef(false);
   const uid = useId().replace(/:/g, '');
+  const reduceMotion = shouldReduceMotionOrData();
 
   const updateSway = React.useCallback(() => {
     const totalSway = windEffect * 14 + mouseDraftRef.current * 22;
@@ -85,6 +87,7 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
 
   // Canvas loop running outside React state to prevent lag
   useEffect(() => {
+    if (reduceMotion) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -152,7 +155,7 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
     animId = requestAnimationFrame(loop);
 
     return () => cancelAnimationFrame(animId);
-  }, [dim.w, dim.h, currentIntensity, curSettings.sparkCount, windEffect]);
+  }, [dim.w, dim.h, currentIntensity, curSettings.sparkCount, windEffect, reduceMotion]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!interactive || !containerRef.current) return;
@@ -260,9 +263,11 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
             d="M50 8C50 8 68 32 68 58C68 84 58 100 62 118C62 122 56 125 50 125C44 125 38 122 38 118C42 100 32 84 32 58C32 32 50 8 50 8Z"
             fill={`url(#flameOuterGrad-${uid})`}
             className="origin-bottom"
-            style={{
-              animation: `flameWobbleOuter ${curSettings.speed}s ease-in-out infinite alternate`,
-            }}
+            style={
+              reduceMotion
+                ? undefined
+                : { animation: `flameWobbleOuter ${curSettings.speed}s ease-in-out infinite alternate` }
+            }
           />
 
           {/* Secondary dynamic licking tongue on the right */}
@@ -270,27 +275,35 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
             d="M50 25C50 25 64 45 64 70C64 92 54 105 57 122C57 124 53 125 50 125C47 125 43 124 43 122C46 105 36 92 36 70C36 45 50 25 50 25Z"
             fill={`url(#flameOuterGrad-${uid})`}
             opacity="0.88"
-            style={{
-              animation: `flameWobbleMid ${curSettings.speed * 0.8}s ease-in-out infinite alternate-reverse`,
-            }}
+            style={
+              reduceMotion
+                ? undefined
+                : {
+                    animation: `flameWobbleMid ${curSettings.speed * 0.8}s ease-in-out infinite alternate-reverse`,
+                  }
+            }
           />
 
           {/* LAYER 2: Middle Vivid Amber Core */}
           <path
             d="M50 38C50 38 60 55 60 78C60 98 54 110 56 122C56 124 53 125 50 125C47 125 44 124 44 122C46 110 40 98 40 78C40 55 50 38 50 38Z"
             fill={`url(#flameMidGrad-${uid})`}
-            style={{
-              animation: `flameWobbleInner ${curSettings.speed * 0.65}s ease-in-out infinite alternate`,
-            }}
+            style={
+              reduceMotion
+                ? undefined
+                : { animation: `flameWobbleInner ${curSettings.speed * 0.65}s ease-in-out infinite alternate` }
+            }
           />
 
           {/* LAYER 3: Incandescent White-Hot Flame Teardrop Heart */}
           <path
             d="M50 62C50 62 56 75 56 92C56 108 53 118 54 123C54 124.5 52 125 50 125C48 125 46 124.5 46 123C47 118 44 108 44 92C44 75 50 62 50 62Z"
             fill={`url(#flameCoreGrad-${uid})`}
-            style={{
-              animation: `flamePulse 1.2s ease-in-out infinite alternate`,
-            }}
+            style={
+              reduceMotion
+                ? undefined
+                : { animation: `flamePulse 1.2s ease-in-out infinite alternate` }
+            }
           />
 
           {/* Base Clean Blue Gas Spark */}
@@ -307,7 +320,7 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
       {/* Interactive Controls Overlay */}
       {showControls && (
         <div className="mt-3 flex items-center gap-1 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-black/[0.06] shadow-sm text-xs font-mono">
-          <span className="text-[10px] text-slate-500 uppercase mr-1">Intensity:</span>
+          <span className="text-xs text-slate-500 uppercase mr-1">Intensity:</span>
           {(['low', 'moderate', 'high', 'extreme'] as const).map((lvl) => (
             <button
               key={lvl}
@@ -315,7 +328,7 @@ export const FireAnimation: React.FC<FireAnimationProps> = ({
                 e.stopPropagation();
                 setCurrentIntensity(lvl);
               }}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+              className={`px-2 py-0.5 rounded-full text-xs font-bold transition-all ${
                 currentIntensity === lvl
                   ? 'bg-[#FF633C] text-white shadow-xs'
                   : 'text-slate-600 hover:text-black hover:bg-black/5'

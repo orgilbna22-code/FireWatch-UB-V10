@@ -3,14 +3,13 @@ import { ActiveTab, Language, ViewMode } from '../../types';
 import { getTranslation } from '../../i18n/translations';
 import { unitKm } from '../../i18n/labels';
 import {
-  CITY_AVERAGE_RISK,
   TOTAL_CITY_POPULATION,
   TOTAL_HISTORICAL_INCIDENTS,
   TOTAL_KHOROO_COUNT,
-  UB_DISTRICTS,
   UB_FIRE_STATIONS,
 } from '../../data/ubGeoData';
 import { minutesSince, riskLevelFromScore, useLiveWeather } from '../../hooks/liveWeather';
+import { useFireRiskState } from '../../hooks/useFireRiskState';
 import { AnalyticsDashboardSection } from './AnalyticsDashboardSection';
 
 interface OverviewDashboardProps {
@@ -37,11 +36,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 }) => {
   const t = getTranslation(language);
   const live = useLiveWeather();
+  const {
+    districts: liveDistricts,
+    cityAverageRisk,
+    mlStatus,
+    totalVerifiedIncidents,
+  } = useFireRiskState();
   const isMn = language === 'mn';
 
-  // Every headline number is computed from the shipped datasets
-  const avgRiskScore = CITY_AVERAGE_RISK;
-  const highestRiskDistrict = [...UB_DISTRICTS].sort((a, b) => b.riskScore - a.riskScore)[0];
+  const avgRiskScore = cityAverageRisk;
+  const sortedDistricts = [...liveDistricts].sort((a, b) => b.riskScore - a.riskScore);
+  const highestRiskDistrict = sortedDistricts[0];
   const highestLevel = LEVEL_LABEL[riskLevelFromScore(highestRiskDistrict.riskScore)];
   const avgLevel = LEVEL_LABEL[riskLevelFromScore(avgRiskScore)];
   const minsAgo = minutesSince(live.fetchedAtMs);
@@ -88,12 +93,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   {isMn ? 'Өгөгдлийн статус' : 'Data Integrity'}
                 </span>
                 <span
-                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                  className={`text-xs font-mono px-1.5 py-0.5 rounded border ${
                     live.status === 'live'
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : live.status === 'stale'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
                   {live.status === 'live'
@@ -112,12 +117,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 </span>
                 <button
                   onClick={onOpenDemoInfo}
-                  className="text-[10px] font-mono bg-[#F7F8FA] text-[#72778A] border border-[#0B124D]/10 px-1.5 py-0.5 rounded hover:text-[#0B124D] transition-colors"
+                  className="text-xs font-mono bg-[#F7F8FA] text-[#5C6275] border border-[#0B124D]/10 px-2 py-1 rounded hover:text-[#0B124D] transition-colors"
                 >
                   {isMn ? 'ЭХ СУРВАЛЖ' : 'PROVENANCE'}
                 </button>
               </div>
-              <span className="text-[11px] text-[#72778A] block">
+              <span className="text-xs text-[#72778A] block mt-0.5">
                 {isMn ? 'Цаг агаар' : 'Weather'}: {live.lastUpdated}
                 {minsAgo !== null && (isMn ? ` · ${minsAgo} мин өмнө` : ` · ${minsAgo} min ago`)}
               </span>
@@ -129,7 +134,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           
           <div className="p-5 rounded-2xl bg-white border border-[#0B124D]/8 shadow-xs">
-            <span className="text-[11px] font-mono text-[#72778A] block mb-1">
+            <span className="text-xs font-mono text-[#72778A] block mb-1">
               {t.stats.avgRiskScore}
             </span>
             <div className="flex items-baseline gap-1">
@@ -138,55 +143,67 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               </span>
               <span className="text-xs text-[#72778A]">/100</span>
             </div>
-            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded inline-block mt-2">
+            <span className="text-xs font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded inline-block mt-2">
               {isMn ? avgLevel.mn : avgLevel.en}
             </span>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-[#0B124D]/8 shadow-xs">
-            <span className="text-[11px] font-mono text-[#72778A] block mb-1">
+            <span className="text-xs font-mono text-[#72778A] block mb-1">
               {t.stats.districtsCovered}
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-3xl sm:text-4xl font-bold text-[#0B124D] tabular-nums">
-                {UB_DISTRICTS.length}
+                {liveDistricts.length}
               </span>
               <span className="text-xs text-[#72778A]">
                 · {TOTAL_KHOROO_COUNT} {isMn ? 'хороо' : 'khoroos'}
               </span>
             </div>
-            <span className="text-[11px] text-[#72778A] mt-2 block">
+            <span className="text-xs text-[#72778A] mt-2 block">
               {(TOTAL_CITY_POPULATION / 1000).toFixed(0)}{' '}
               {isMn ? 'мянган оршин суугч' : 'thousand residents'}
             </span>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-[#0B124D]/8 shadow-xs">
-            <span className="text-[11px] font-mono text-[#72778A] block mb-1">
-              {t.stats.totalIncidentsAnalyzed}
+            <span className="text-xs font-mono text-[#72778A] block mb-1">
+              {totalVerifiedIncidents > 0
+                ? isMn
+                  ? 'Баталгаажсан бодит дуудлага'
+                  : 'Verified Real Incidents'
+                : t.stats.totalIncidentsAnalyzed}
             </span>
             <div className="font-mono text-3xl sm:text-4xl font-bold text-[#0B124D] tabular-nums">
-              {TOTAL_HISTORICAL_INCIDENTS.toLocaleString()}
+              {totalVerifiedIncidents > 0
+                ? totalVerifiedIncidents.toLocaleString()
+                : TOTAL_HISTORICAL_INCIDENTS.toLocaleString()}
             </div>
-            <span className="text-[11px] text-[#72778A] mt-2 block">
-              {isMn ? 'Дүүргүүдийн дуудлагын нэгтгэл' : 'Aggregated district call log'}
+            <span className="text-xs text-[#72778A] mt-2 block">
+              {totalVerifiedIncidents > 0
+                ? isMn
+                  ? 'Импортлогдсон SQLite бодит сан'
+                  : 'Verified real agency log (SQLite)'
+                : isMn
+                ? 'Жишээ суурь дуудлагын нэгтгэл'
+                : 'Aggregated demo call baseline'}
             </span>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-[#0B124D]/8 shadow-xs">
-            <span className="text-[11px] font-mono text-[#72778A] block mb-1">
+            <span className="text-xs font-mono text-[#72778A] block mb-1">
               {t.stats.operationalStations}
             </span>
             <div className="font-mono text-3xl sm:text-4xl font-bold text-[#0B124D] tabular-nums">
               {UB_FIRE_STATIONS.length}
             </div>
-            <span className="text-[11px] text-[#12B89A] font-medium mt-2 block">
+            <span className="text-xs text-emerald-700 font-medium mt-2 block">
               {isMn ? 'Бүх дүүрэгт байнгын бэлэн' : 'NEMA Active Stations'}
             </span>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-[#0B124D]/8 shadow-xs col-span-2 sm:col-span-1">
-            <span className="text-[11px] font-mono text-[#72778A] block mb-1">
+            <span className="text-xs font-mono text-[#72778A] block mb-1">
               {isMn ? 'Цаг агаарын хуурайшилт' : 'Fire Weather Index'}
             </span>
             <div className="flex items-baseline gap-1.5">
@@ -194,12 +211,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 {live.fireWeatherIndex}
               </span>
               <span
-                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                className={`text-xs font-mono px-1.5 py-0.5 rounded ${
                   live.status === 'live'
                     ? 'bg-emerald-50 text-emerald-700'
                     : live.status === 'stale'
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-amber-50 text-amber-800'
+                    : 'bg-slate-100 text-slate-700'
                 }`}
               >
                 {live.status === 'live'
@@ -213,11 +230,61 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   : 'OFFLINE'}
               </span>
             </div>
-            <span className="text-[11px] text-[#72778A] mt-2 block">
-              {live.windSpeedKmh} {isMn ? 'км/ц' : 'km/h'} · {isMn ? live.conditionMn : live.conditionEn}
+            <span className="text-xs text-[#72778A] mt-2 block">
+              {live.windSpeedKmh} {isMn ? 'км/ц' : 'km/h'} · {live.coverageCount ?? 1}/9 {isMn ? 'дүүрэг' : 'dist'}
             </span>
           </div>
 
+        </div>
+
+        {/* Honest 3-Axis & ML Calibration Status Strip */}
+        <div
+          className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+            mlStatus.gatePassed
+              ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+              : 'bg-white border-[#0B124D]/10 text-[#0B124D]'
+          }`}
+        >
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                  mlStatus.gatePassed
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                {mlStatus.gatePassed
+                  ? isMn
+                    ? 'ML МАГАДЛАЛ (%) ИДЭВХТЭЙ'
+                    : 'CALIBRATED PROBABILITY ACTIVE'
+                  : isMn
+                  ? 'ЭРСДЭЛИЙН 0–100 ИНДЕКС (ML ТҮГЖИГДСЭН)'
+                  : 'SPREAD INDEX ONLY (PROBABILITY % LOCKED)'}
+              </span>
+              <span className="text-xs font-bold">
+                {isMn
+                  ? 'Гал гарах магадлал (%), Тархах эрсдэл (0–100), Хариу арга хэмжээг салгасан тооцоолол'
+                  : 'Strict 3-Axis Separation: Ignition Probability % vs Spread Hazard Index vs Response Capability'}
+              </span>
+            </div>
+            <p className="text-xs text-[#72778A]">
+              {mlStatus.gatePassed && mlStatus.latestModel
+                ? isMn
+                  ? `3-шатлалт хуваалт: ROC-AUC ${mlStatus.latestModel.metrics.rocAuc}${mlStatus.latestModel.metrics.rocAucCi95 ? ` [${mlStatus.latestModel.metrics.rocAucCi95[0]}–${mlStatus.latestModel.metrics.rocAucCi95[1]}]` : ''} · ECE ${mlStatus.latestModel.metrics.ece} · ${mlStatus.realIncidentCount} бодит дуудлага, ${mlStatus.historicalWeatherCount} архивын цаг агаар.`
+                  : `3-way holdout: ROC-AUC ${mlStatus.latestModel.metrics.rocAuc}${mlStatus.latestModel.metrics.rocAucCi95 ? ` [${mlStatus.latestModel.metrics.rocAucCi95[0]}–${mlStatus.latestModel.metrics.rocAucCi95[1]}]` : ''} · ECE ${mlStatus.latestModel.metrics.ece} · ${mlStatus.realIncidentCount} real rows, ${mlStatus.historicalWeatherCount} archive days.`
+                : isMn
+                ? `${mlStatus.mlReadiness?.readinessReasonMn ?? 'Бодит түүхэн өгөгдөл (≥200) болон цаг агаарын баталгаажуулалт бүрдэх хүртэл зохиомол % магадлал харуулахгүй.'} (Анхаар: 172/204 хорооны статик суурь шинж чанар загварчилсан тооцоолол.)`
+                : `${mlStatus.mlReadiness?.readinessReasonEn ?? 'Calibrated ignition % remains locked until sufficient real historical data + Open-Meteo archive weather pass validation gates.'} (Note: 172/204 static khoroo inputs remain synthesized baselines.)`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelectTab('map')}
+            className="px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold shrink-0 transition-colors"
+          >
+            {isMn ? 'Газрын зураг дээр шинжлэх →' : 'Inspect on Map →'}
+          </button>
         </div>
 
         {/* Analytics Dashboard (4-Column Dark Telemetry Strip) */}
@@ -263,8 +330,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-interface">
-                  {[...UB_DISTRICTS]
-                    .sort((a, b) => b.riskScore - a.riskScore)
+                  {sortedDistricts
                     .map((d) => (
                       <tr
                         key={d.id}
@@ -327,7 +393,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="text-[11px] text-[#FF633C] group-hover:underline font-medium">
+                          <span className="text-xs text-[#FF633C] group-hover:underline font-medium">
                             {language === 'mn' ? 'Шинжлэх' : 'Inspect'} →
                           </span>
                         </td>
@@ -343,7 +409,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             
             {/* Top Risk Hotspot Focus Card */}
             <div className="bg-[#0B124D] text-white p-6 rounded-2xl shadow-xs relative overflow-hidden">
-              <span className="text-[10px] font-mono tracking-widest text-[#FF633C] uppercase font-bold block mb-1">
+              <span className="text-xs font-mono tracking-widest text-[#FF633C] uppercase font-bold block mb-1">
                 {language === 'mn' ? 'ОНЦГОЙ АНХААРАХ БҮС' : 'HIGHEST RISK INDEX ZONE'}
               </span>
               <h4 className="font-editorial text-2xl font-bold mb-2">
@@ -353,11 +419,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 <span className="font-mono text-4xl font-bold text-[#FF633C]">
                   {highestRiskDistrict.riskScore}
                 </span>
-                <span className="font-mono text-xs text-white/60">
+                <span className="font-mono text-xs text-white/80">
                   / 100 {isMn ? highestLevel.mn : highestLevel.en}
                 </span>
               </div>
-              <p className="text-xs text-white/80 leading-relaxed mb-4">
+              <p className="text-xs text-white/85 leading-relaxed mb-4">
                 {language === 'mn'
                   ? highestRiskDistrict.keyObservationsMn
                   : highestRiskDistrict.keyObservationsEn}
@@ -367,7 +433,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   onSelectDistrict(highestRiskDistrict.id);
                   onSelectTab('map');
                 }}
-                className="w-full py-2 bg-[#FF633C] hover:bg-[#e05430] text-white rounded-xl text-xs font-bold transition-colors text-center"
+                className="w-full py-2.5 min-h-[44px] bg-[#FF633C] hover:bg-[#e05430] text-white rounded-xl text-xs font-bold transition-colors text-center"
               >
                 {language === 'mn' ? 'Газрын зураг дээр төвлөрөх' : 'Focus on Map'} →
               </button>
@@ -381,13 +447,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
               <button
                 onClick={() => onSelectTab('explorer')}
-                className="w-full p-3 text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
+                className="w-full p-3 min-h-[44px] text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
               >
                 <div>
                   <span className="text-xs font-bold text-[#0B124D] block">
                     {language === 'mn' ? 'Эрсдэлийн симулятор' : 'Risk Weight Simulator'}
                   </span>
-                  <span className="text-[11px] text-[#72778A]">
+                  <span className="text-xs text-[#72778A]">
                     {language === 'mn' ? 'Хүчин зүйлсийн жинг өөрчлөх' : 'Adjust model weights interactively'}
                   </span>
                 </div>
@@ -396,13 +462,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
               <button
                 onClick={() => onSelectTab('calendar')}
-                className="w-full p-3 text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
+                className="w-full p-3 min-h-[44px] text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
               >
                 <div>
                   <span className="text-xs font-bold text-[#0B124D] block">
                     {language === 'mn' ? '12 сарын эрсдэлийн хуанли' : '12-Month Calendar'}
                   </span>
-                  <span className="text-[11px] text-[#72778A]">
+                  <span className="text-xs text-[#72778A]">
                     {language === 'mn' ? 'Улирлын оргил сарууд' : 'Heating & dry season patterns'}
                   </span>
                 </div>
@@ -411,13 +477,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
               <button
                 onClick={() => onSelectTab('reports')}
-                className="w-full p-3 text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
+                className="w-full p-3 min-h-[44px] text-left rounded-xl bg-[#F7F8FA] hover:bg-slate-100 border border-[#0B124D]/5 transition-colors flex items-center justify-between"
               >
                 <div>
                   <span className="text-xs font-bold text-[#0B124D] block">
                     {language === 'mn' ? 'Тайлан татах (PDF/CSV)' : 'Export Analytics Report'}
                   </span>
-                  <span className="text-[11px] text-[#72778A]">
+                  <span className="text-xs text-[#72778A]">
                     {language === 'mn' ? 'Хэвлэх эсвэл өгөгдөл татах' : 'Download clean datasets'}
                   </span>
                 </div>

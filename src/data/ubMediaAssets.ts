@@ -1,12 +1,39 @@
 export const UB_MEDIA = {
-  ger: new URL('../assets/images/ub_ger_hillside_1794629996135.jpg', import.meta.url).href,
-  apartment: new URL('../assets/images/ub_urban_apartments_1794629996588.jpg', import.meta.url).href,
-  mixed: new URL('../assets/images/ub_mixed_settlement_1794629996821.jpg', import.meta.url).href,
-  satellite: new URL('../assets/images/ub_satellite_orthophoto_1794629996932.jpg', import.meta.url).href,
+  ger: '/assets/images/ub_ger_hillside_1794629996135.jpg',
+  mixed: '/assets/images/ub_mixed_settlement_1794629996821.jpg',
+  apartment: '/assets/images/ub_urban_apartments_1794629996588.jpg',
+  satellite: '/assets/images/ub_satellite_orthophoto_1794629996932.jpg',
 } as const;
 
-export function pickSettlementPhoto(gerPercent: number): string {
-  if (gerPercent >= 55) return UB_MEDIA.ger;
-  if (gerPercent >= 25) return UB_MEDIA.mixed;
-  return UB_MEDIA.apartment;
+export interface ResponsiveMediaSources {
+  fallback: string;
+  avifSrcSet?: string;
+  webpSrcSet?: string;
+  width: number;
+  height: number;
+}
+
+const KNOWN_MEDIA_STEMS = new Set([
+  '/assets/images/ub_ger_hillside_1794629996135.jpg',
+  '/assets/images/ub_mixed_settlement_1794629996821.jpg',
+  '/assets/images/ub_urban_apartments_1794629996588.jpg',
+  '/assets/images/ub_satellite_orthophoto_1794629996932.jpg',
+]);
+
+export function getResponsiveMediaSources(url: string): ResponsiveMediaSources {
+  if (!KNOWN_MEDIA_STEMS.has(url)) {
+    return {
+      fallback: url,
+      width: 960,
+      height: 717,
+    };
+  }
+  const stem = url.replace(/\.jpg$/i, '');
+  return {
+    fallback: url,
+    avifSrcSet: `${stem}-800.avif 800w`,
+    webpSrcSet: `${stem}-400.webp 400w, ${stem}-800.webp 800w, ${stem}-1200.webp 1200w`,
+    width: 960,
+    height: 717,
+  };
 }

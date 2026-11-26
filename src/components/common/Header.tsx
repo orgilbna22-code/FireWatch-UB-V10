@@ -12,7 +12,7 @@ import {
   FireBackgroundMode,
   publishFireBgMode,
   readFireBgMode,
-} from './GlobalFireBackground';
+} from '../../utils/fireBgMode';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -112,14 +112,14 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-[1100] bg-white/95 backdrop-blur-2xl border-b border-black/[0.06] px-2.5 sm:px-6 lg:px-8 py-2 sm:py-3 transition-all duration-300">
+    <header className="sticky top-0 z-[1100] bg-white/98 border-b border-black/[0.06] px-2 sm:px-6 lg:px-8 py-2 sm:py-3 transition-colors duration-200">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-3">
         {/* Zone 1: Brand wordmark + inline Audience switcher */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab('landing')}
-            className="flex items-center gap-1.5 sm:gap-2 group text-left rounded-2xl p-0.5 sm:p-1 -ml-0.5 sm:-ml-1 transition-transform active:scale-95 shrink-0"
+            onClick={() => setActiveTab('citizen')}
+            className="flex items-center gap-1.5 sm:gap-2 group text-left rounded-2xl p-0.5 sm:p-1 -ml-0.5 sm:-ml-1 transition-transform active:scale-95 shrink-0 min-h-[44px]"
           >
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-[#0B124D] to-[#11166B] flex items-center justify-center text-white shrink-0 shadow-sm shadow-[#0B124D]/20 group-hover:scale-105 transition-all">
               <svg
@@ -127,38 +127,38 @@ export const Header: React.FC<HeaderProps> = ({
                 fill="none"
                 stroke="#FF633C"
                 strokeWidth="2.4"
-                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                className="w-4 h-4"
                 aria-hidden="true"
               >
                 <path d="M12 2C8 6 6 9 6 13a6 6 0 0 0 12 0c0-4-2-7-6-11z" />
                 <path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="#FFFFFF" stroke="none" />
               </svg>
             </div>
-            <span className="font-editorial text-[15px] sm:text-xl font-bold tracking-tight text-[#0B124D] whitespace-nowrap">
-              FIREWATCH<span className="text-[#FF633C] font-mono text-[10px] sm:text-xs ml-0.5 sm:ml-1 font-semibold tracking-normal">UB</span>
+            <span className="font-editorial text-[14px] sm:text-xl font-bold tracking-tight text-[#0B124D] whitespace-nowrap">
+              FIREWATCH<span className="hidden min-[440px]:inline text-[#FF633C] font-mono text-xs ml-0.5 sm:ml-1 font-semibold tracking-normal">UB</span>
             </span>
           </button>
 
           {/* Compact Audience Role Switcher */}
-          <div className="relative min-w-0" ref={audienceRef}>
+          <div className="relative shrink-0" ref={audienceRef}>
             <button
               type="button"
               onClick={() => setIsAudienceOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={isAudienceOpen}
               aria-label={isMn ? 'Хэрэглэгчийн төрөл солих' : 'Switch audience role'}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full bg-[#0B124D]/6 hover:bg-[#0B124D]/12 text-[#0B124D] text-[10px] sm:text-[11px] font-semibold border border-black/[0.06] transition-colors whitespace-nowrap max-w-[96px] sm:max-w-none"
+              className="flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 min-h-[44px] min-w-[44px] rounded-full bg-[#0B124D]/6 hover:bg-[#0B124D]/12 text-[#0B124D] text-xs font-semibold border border-black/[0.06] transition-colors whitespace-nowrap"
             >
               <span aria-hidden="true" className="shrink-0">{currentProfile.icon}</span>
-              <span className="truncate">{isMn ? currentProfile.labelMn : currentProfile.labelEn}</span>
-              <span className="text-[9px] opacity-70 shrink-0" aria-hidden="true">▾</span>
+              <span className="hidden min-[440px]:inline truncate max-w-[96px] sm:max-w-none">{isMn ? currentProfile.labelMn : currentProfile.labelEn}</span>
+              <span className="text-xs opacity-70 shrink-0" aria-hidden="true">▾</span>
             </button>
 
             {isAudienceOpen && (
               <div
                 role="listbox"
                 aria-label={isMn ? 'Хэрэглэгчийн төрөл' : 'Audience roles'}
-                className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 top-full mt-1.5 w-60 sm:w-64 bg-white rounded-2xl shadow-xl border border-black/[0.08] p-1.5 z-50"
+                className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-black/[0.08] p-1.5 z-50"
               >
                 {(['citizen', 'fire_command', 'police'] as AudienceRole[]).map((roleId) => {
                   const prof = AUDIENCE_PROFILES[roleId];
@@ -173,14 +173,14 @@ export const Header: React.FC<HeaderProps> = ({
                         onSelectAudience(roleId);
                         setIsAudienceOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex items-start gap-2.5 ${
+                      className={`w-full text-left px-3 py-2.5 min-h-[44px] rounded-xl transition-colors flex items-start gap-2.5 ${
                         selected ? 'bg-[#0B124D] text-white' : 'text-[#0B124D] hover:bg-[#F7F8FA]'
                       }`}
                     >
                       <span className="text-base mt-0.5" aria-hidden="true">{prof.icon}</span>
                       <div className="min-w-0">
                         <div className="text-xs font-bold">{isMn ? prof.labelMn : prof.labelEn}</div>
-                        <div className={`text-[10px] leading-snug ${selected ? 'text-white/75' : 'text-[#5C6275]'}`}>
+                        <div className={`text-xs leading-snug ${selected ? 'text-white/80' : 'text-[#5C6275]'}`}>
                           {isMn ? prof.promiseMn : prof.promiseEn}
                         </div>
                       </div>
@@ -206,7 +206,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setActiveTab(item.id)}
                 aria-current={isActive ? 'page' : undefined}
                 title={item.title}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
+                className={`px-3 py-2 min-h-[44px] inline-flex items-center text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
                   isActive
                     ? 'bg-white text-[#0B124D] shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
                     : 'text-[#5C6275] hover:text-[#0B124D]'
@@ -230,7 +230,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               aria-haspopup="true"
               aria-expanded={isMoreOpen}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1 whitespace-nowrap ${
+              className={`px-3 py-2 min-h-[44px] text-xs font-semibold rounded-full transition-colors flex items-center gap-1 whitespace-nowrap ${
                 activeSecondary
                   ? 'bg-white text-[#0B124D] shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
                   : 'text-[#5C6275] hover:text-[#0B124D]'
@@ -259,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setActiveTab(item.id);
                       setIsMoreOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-xs font-medium rounded-xl transition-colors ${
+                    className={`w-full text-left px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-xl transition-colors flex items-center ${
                       activeTab === item.id
                         ? 'bg-[#0B124D]/8 text-[#0B124D] font-bold'
                         : 'text-[#5C6275] hover:bg-[#F7F8FA] hover:text-[#0B124D]'
@@ -278,7 +278,7 @@ export const Header: React.FC<HeaderProps> = ({
                         onToggleFamilyMode();
                         setIsMoreOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold rounded-xl text-amber-900 bg-amber-50 hover:bg-amber-100 transition-colors"
+                      className="w-full text-left px-3 py-2.5 min-h-[44px] text-xs font-semibold rounded-xl text-amber-900 bg-amber-50 hover:bg-amber-100 transition-colors flex items-center"
                     >
                       🏡 {isMn ? 'Гэр бүл, ахмадын хялбар горим' : 'Family & Elder Easy View'}
                     </button>
@@ -290,12 +290,12 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Zone 3: Compact Right Side (Settings Menu + 1 Primary Audience CTA + Mobile Menu) */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Compact Language Quick Toggle */}
           <button
             type="button"
             onClick={() => setLanguage(isMn ? 'en' : 'mn')}
-            className="w-8 h-8 sm:w-9 sm:h-9 text-[11px] sm:text-xs font-mono font-bold text-[#0B124D] hover:bg-[#0B124D]/5 rounded-full transition-colors border border-black/[0.08] flex items-center justify-center shrink-0"
+            className="w-11 h-11 text-xs font-mono font-bold text-[#0B124D] hover:bg-[#0B124D]/5 rounded-full transition-colors border border-black/[0.08] flex items-center justify-center shrink-0"
             aria-label={isMn ? 'Switch language to English' : 'Хэлийг Монгол болгох'}
           >
             {isMn ? 'EN' : 'MN'}
@@ -310,14 +310,14 @@ export const Header: React.FC<HeaderProps> = ({
               aria-expanded={isSettingsOpen}
               aria-label={isMn ? 'Дэлгэц ба дууны тохиргоо' : 'Display & audio settings'}
               title={isMn ? 'Тохиргоо' : 'Settings'}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full text-sm flex items-center justify-center transition-colors text-[#5C6275] hover:text-[#0B124D] hover:bg-black/5 border border-black/[0.08]"
+              className="w-11 h-11 rounded-full text-sm flex items-center justify-center transition-colors text-[#5C6275] hover:text-[#0B124D] hover:bg-black/5 border border-black/[0.08]"
             >
               <span aria-hidden="true">⚙️</span>
             </button>
 
             {isSettingsOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-black/[0.08] p-3 z-50 space-y-3 text-xs">
-                <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#5C6275]">
+              <div className="absolute right-0 top-full mt-1.5 w-68 bg-white rounded-2xl shadow-xl border border-black/[0.08] p-3 z-50 space-y-3 text-xs">
+                <div className="font-mono text-xs font-bold uppercase tracking-wider text-[#5C6275]">
                   {isMn ? 'Тохиргоо' : 'Preferences'}
                 </div>
 
@@ -326,10 +326,10 @@ export const Header: React.FC<HeaderProps> = ({
                     type="button"
                     onClick={onToggleTheme}
                     aria-pressed={theme === 'dark'}
-                    className="w-full px-3 py-2 rounded-xl bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] font-semibold flex items-center justify-between"
+                    className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] font-semibold flex items-center justify-between"
                   >
                     <span>{theme === 'dark' ? (isMn ? '☀️ Өдрийн горим' : '☀️ Light theme') : (isMn ? '🌙 Шөнийн горим' : '🌙 Dark theme')}</span>
-                    <span className="text-[10px] font-mono opacity-70">{theme === 'dark' ? 'DARK' : 'LIGHT'}</span>
+                    <span className="text-xs font-mono opacity-80">{theme === 'dark' ? 'DARK' : 'LIGHT'}</span>
                   </button>
                 )}
 
@@ -337,13 +337,13 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => soundEngine.toggle()}
                   aria-pressed={soundOn}
-                  className="w-full px-3 py-2 rounded-xl bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] font-semibold flex items-center justify-between"
+                  className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] font-semibold flex items-center justify-between"
                 >
                   <span>{soundOn ? (isMn ? '🔥 Галын чимээ: Асаалттай' : '🔥 Hearth sound: On') : (isMn ? '🔇 Галын чимээ: Хаалттай' : '🔇 Hearth sound: Muted')}</span>
                 </button>
 
-                <div className="space-y-1">
-                  <div className="text-[10px] font-mono text-[#5C6275] px-1">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-mono text-[#5C6275] px-1">
                     {isMn ? 'Арын галын дөл' : 'Backdrop flame'}
                   </div>
                   <div className="grid grid-cols-3 gap-1 bg-[#F7F8FA] p-1 rounded-xl">
@@ -353,7 +353,7 @@ export const Header: React.FC<HeaderProps> = ({
                         type="button"
                         onClick={() => handleFireMode(m)}
                         aria-pressed={fireMode === m}
-                        className={`py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                        className={`min-h-[44px] py-2 rounded-lg text-xs font-bold transition-colors ${
                           fireMode === m ? 'bg-[#0B124D] text-white' : 'text-[#5C6275] hover:text-[#0B124D]'
                         }`}
                       >
@@ -369,7 +369,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onOpenDemoInfo();
                     setIsSettingsOpen(false);
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-black/[0.08] text-[#0B124D] font-semibold hover:bg-[#F7F8FA] text-left"
+                  className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-black/[0.08] text-[#0B124D] font-semibold hover:bg-[#F7F8FA] text-left"
                 >
                   ℹ️ {isMn ? 'Өгөгдлийн эх сурвалж & аргачлал' : 'Data sources & methodology'}
                 </button>
@@ -381,7 +381,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab(currentProfile.ctaTab)}
-            className={`hidden lg:flex px-4 py-1.5 text-xs font-semibold rounded-full transition-all shadow-sm active:scale-95 whitespace-nowrap min-h-[36px] items-center justify-center ${
+            className={`hidden lg:flex px-4 py-1.5 text-xs font-semibold rounded-full transition-all shadow-sm active:scale-95 whitespace-nowrap min-h-[44px] items-center justify-center ${
               activeTab === currentProfile.ctaTab
                 ? 'bg-[#FF633C] text-white ring-2 ring-[#FF633C]/40'
                 : 'bg-[#0B124D] hover:bg-[#11166B] text-white'
@@ -395,7 +395,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenMobileMenu}
-              className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-[#0B124D] flex items-center justify-center transition-colors text-base font-bold shrink-0 shadow-2xs"
+              className="lg:hidden w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-[#0B124D] flex items-center justify-center transition-colors text-base font-bold shrink-0 shadow-2xs"
               aria-label={isMn ? 'Цэс нээх' : 'Open menu'}
             >
               ☰

@@ -28,7 +28,7 @@ export const AUDIENCE_PROFILES: Record<AudienceRole, AudienceProfile> = {
     ctaMn: 'Миний хорооны эрсдэлийг харах',
     ctaEn: "Check my khoroo's risk",
     ctaTab: 'map',
-    mainTabs: ['landing', 'map', 'personal', 'safety'],
+    mainTabs: ['citizen', 'map', 'personal', 'safety'],
   },
   fire_command: {
     id: 'fire_command',
@@ -52,7 +52,7 @@ export const AUDIENCE_PROFILES: Record<AudienceRole, AudienceProfile> = {
     ctaMn: 'Мэдээлэл ба холбоо',
     ctaEn: 'Overview & contacts',
     ctaTab: 'police',
-    mainTabs: ['landing', 'map', 'police', 'safety'],
+    mainTabs: ['citizen', 'map', 'police', 'safety'],
   },
 };
 
@@ -60,7 +60,8 @@ export const ALL_TAB_METADATA: Record<
   ActiveTab,
   { shortMn: string; shortEn: string; fullMn: string; fullEn: string; icon: string }
 > = {
-  landing: { shortMn: 'Эхлэл', shortEn: 'Home', fullMn: 'Нүүр хуудас', fullEn: 'Landing page', icon: '🏠' },
+  citizen: { shortMn: 'Хороо шалгах', shortEn: 'Check Risk', fullMn: 'Миний хорооны эрсдэл (Нүүр)', fullEn: 'My Khoroo Risk (Home)', icon: '🏠' },
+  landing: { shortMn: 'Тухай', shortEn: 'About', fullMn: 'Төслийн тухай (Танилцуулга)', fullEn: 'About FIREWATCH UB', icon: 'ℹ️' },
   overview: { shortMn: 'Тойм', shortEn: 'Overview', fullMn: 'Нийслэлийн тойм самбар', fullEn: 'City Overview', icon: '📈' },
   map: { shortMn: 'Зураг', shortEn: 'Map', fullMn: 'Галын эрсдэлийн зураг', fullEn: 'Fire Risk Map', icon: '🗺️' },
   personal: { shortMn: 'Миний гэр', shortEn: 'My Home', fullMn: 'Миний гэр ба аудит', fullEn: 'My Home & Audit', icon: '👤' },
@@ -77,7 +78,7 @@ export const ALL_TAB_METADATA: Record<
 };
 
 const ALL_ORDERED_TABS: ActiveTab[] = [
-  'landing',
+  'citizen',
   'map',
   'overview',
   'districts',
@@ -90,6 +91,7 @@ const ALL_ORDERED_TABS: ActiveTab[] = [
   'calendar',
   'weather',
   'sources',
+  'landing',
   'police',
 ];
 

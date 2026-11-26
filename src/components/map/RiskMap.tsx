@@ -1,21 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   ArrowUpDown,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Flame,
   Globe,
   Layers,
   Map as MapIcon,
+  MapPin,
   Satellite,
   Search,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { DistrictData, KhorooData, Language, ViewMode } from '../../types';
 import {
-  CITY_AVERAGE_RISK,
   UB_CENTER_COORDS,
   UB_DISTRICTS,
   UB_FIRE_STATIONS,
@@ -25,6 +25,7 @@ import {
 } from '../../data/ubGeoData';
 import { AreaAnalysisPanel } from './AreaAnalysisPanel';
 import { Tactical3DOverlay } from './Tactical3DOverlay';
+import { Tactical3DHud } from './Tactical3DHud';
 import {
   HEAT_LEGEND_GRADIENT,
   ThermalHeatLayer,
@@ -33,9 +34,19 @@ import {
 } from './ThermalHeatLayer';
 import { getTranslation } from '../../i18n/translations';
 import { escapeHtml } from '../../utils/safeHtml';
-import { khorooLabel, riskLevelLabel, stationCodeLabel } from '../../i18n/labels';
+import { khorooLabel, locationConfidenceLabel, riskLevelLabel, stationCodeLabel } from '../../i18n/labels';
 import { useLiveWeather } from '../../hooks/liveWeather';
-import { mapScaleLabel } from '../../utils/tactical3dData';
+import { useFireRiskState } from '../../hooks/useFireRiskState';
+import { mergeSpatialHeatSources } from '../../utils/riskEngine';
+import {
+  DEFAULT_TACTICAL_ASSUMPTIONS,
+  type TacticalScenarioAssumptions,
+} from '../../data/tacticalScenarioConfig';
+import {
+  buildTactical3DScene,
+  generateCityBlueFootprints,
+  mapScaleLabel,
+} from '../../utils/tactical3dData';
 
 interface RiskMapProps {
   language: Language;
@@ -65,13 +76,13 @@ const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: 'tactical3d',
     icon: '🛰️',
-    labelMn: '3D Тактик (Далий)',
+    labelMn: '3D Тактик (Аксонометрик)',
     shortMn: '3D Тактик',
-    labelEn: '3D Tactical View',
+    labelEn: '3D Tactical (2.5D)',
     shortEn: '3D Tactical',
-    descMn: 'Далий 3D барилга, цэнхэр ул мөр, замын маршрут',
-    descEn: 'Tilted 3D buildings, blue footprints & response route',
-    swatch: 'linear-gradient(135deg, #060b16 0%, #172554 58%, #ef4444 100%)',
+    descMn: '2.5D барилга, таамагласан радиус ба ойролцоо чиглэл',
+    descEn: 'Axonometric 3D massing, assumed zone & rough corridor',
+    swatch: 'linear-gradient(135deg, #060b16 0%, #172554 58%, #FF633C 100%)',
   },
   {
     id: 'osm',
@@ -183,34 +194,61 @@ export const RiskMap: React.FC<RiskMapProps> = ({
   const t = getTranslation(language);
   const isMn = language === 'mn';
   const live = useLiveWeather();
+  const fireState = useFireRiskState();
+  const liveDistricts = fireState.districts;
+  const liveKhoroos = fireState.khoroos;
+
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const labelsTileLayerRef = useRef<L.TileLayer | null>(null);
 
-  const [activeDistrict, setActiveDistrict] = useState<DistrictData | null>(() => {
-    return UB_DISTRICTS.find((d) => d.id === selectedDistrictId) || UB_DISTRICTS[0];
+  const [activeDistrictId, setActiveDistrictId] = useState<string | null>(() => {
+    return (UB_DISTRICTS.find((d) => d.id === selectedDistrictId) || UB_DISTRICTS[0]).id;
   });
-  const [selectedKhoroo, setSelectedKhoroo] = useState<KhorooData | null>(null);
+  const [selectedKhorooId, setSelectedKhorooId] = useState<string | null>(null);
+
+  const activeDistrict = useMemo(
+    () => (activeDistrictId ? liveDistricts.find((d) => d.id === activeDistrictId) ?? null : null),
+    [activeDistrictId, liveDistricts]
+  );
+  const selectedKhoroo = useMemo(
+    () => (selectedKhorooId ? liveKhoroos.find((k) => k.id === selectedKhorooId) ?? null : null),
+    [selectedKhorooId, liveKhoroos]
+  );
+  const setActiveDistrict = useCallback((d: DistrictData | null) => {
+    setActiveDistrictId(d ? d.id : null);
+  }, []);
+  const setSelectedKhoroo = useCallback((kh: KhorooData | null) => {
+    setSelectedKhorooId(kh ? kh.id : null);
+  }, []);
+
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(true);
   const [showMobileLegend, setShowMobileLegend] = useState<boolean>(false);
 
-  const [tileStyle, setTileStyle] = useState<MapTileStyle>('satellite');
-  const [lastMapStyle, setLastMapStyle] = useState<NonSatelliteStyle>('tactical3d');
-  const [is3DTilt, setIs3DTilt] = useState<boolean>(true);
+  const [tileStyle, setTileStyle] = useState<MapTileStyle>('light');
+  const [lastMapStyle, setLastMapStyle] = useState<NonSatelliteStyle>('light');
+  const [is3DExtruded, setIs3DExtruded] = useState<boolean>(true);
+  const [scenarioStarted, setScenarioStarted] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.search.includes('autostart=1')
+  );
+  const [assumptions, setAssumptions] = useState<TacticalScenarioAssumptions>(
+    () => ({ ...DEFAULT_TACTICAL_ASSUMPTIONS })
+  );
+  const [osmBuildingCount, setOsmBuildingCount] = useState<number>(0);
   const coordTextRef = useRef<HTMLDivElement | null>(null);
   const hoverReadoutRef = useRef<HTMLSpanElement | null>(null);
   const [showBasemapDropdown, setShowBasemapDropdown] = useState(false);
+  const [showDistrictFilter, setShowDistrictFilter] = useState(false);
   const [khorooMode, setKhorooMode] = useState<'district_only' | 'all' | 'none'>('none');
   const [showStations, setShowStations] = useState(false);
   const [showStationBuffers, setShowStationBuffers] = useState(false);
   const [showIncidents, setShowIncidents] = useState(false);
-  const [showHeatmap, setShowHeatmap] = useState(true);
-  const [overlayOrder, setOverlayOrder] = useState<Array<'heatmap' | 'khoroos' | 'stations' | 'buffers' | 'incidents'>>(['heatmap']);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [overlayOrder, setOverlayOrder] = useState<Array<'heatmap' | 'khoroos' | 'stations' | 'buffers' | 'incidents'>>([]);
   const [layerLimitNotice, setLayerLimitNotice] = useState<string | null>(null);
   const [showLayersDropdown, setShowLayersDropdown] = useState(false);
-  const [satelliteOpacity] = useState<number>(0.14);
   const initialDist = UB_DISTRICTS.find((d) => d.id === selectedDistrictId) || UB_DISTRICTS[0];
   const [mapZoom, setMapZoom] = useState<number>(initialDist ? 12 : 11);
   const prevSyncedDistrictIdRef = useRef<string | null | undefined>(selectedDistrictId);
@@ -268,14 +306,12 @@ export const RiskMap: React.FC<RiskMapProps> = ({
   );
 
   const [sortBy, setSortBy] = useState<DistrictSortMode>('risk_desc');
-  const carouselRef = useRef<HTMLDivElement | null>(null);
   const layersDropdownRef = useRef<HTMLDivElement | null>(null);
   const basemapDropdownRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
+  const districtFilterRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!showLayersDropdown && !showBasemapDropdown) return;
+    if (!showLayersDropdown && !showBasemapDropdown && !showDistrictFilter) return;
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as Node;
       if (showLayersDropdown && layersDropdownRef.current && !layersDropdownRef.current.contains(target)) {
@@ -284,11 +320,15 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       if (showBasemapDropdown && basemapDropdownRef.current && !basemapDropdownRef.current.contains(target)) {
         setShowBasemapDropdown(false);
       }
+      if (showDistrictFilter && districtFilterRef.current && !districtFilterRef.current.contains(target)) {
+        setShowDistrictFilter(false);
+      }
     };
     const onKeyEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowLayersDropdown(false);
         setShowBasemapDropdown(false);
+        setShowDistrictFilter(false);
       }
     };
     document.addEventListener('mousedown', onDocMouseDown);
@@ -297,7 +337,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       document.removeEventListener('mousedown', onDocMouseDown);
       document.removeEventListener('keydown', onKeyEsc);
     };
-  }, [showLayersDropdown, showBasemapDropdown]);
+  }, [showLayersDropdown, showBasemapDropdown, showDistrictFilter]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [geoLocating, setGeoLocating] = useState(false);
@@ -308,6 +348,8 @@ export const RiskMap: React.FC<RiskMapProps> = ({
   }[]>([]);
 
   const districtsLayerGroup = useRef<L.LayerGroup | null>(null);
+  const districtPolygonsRef = useRef<Map<string, L.Polygon>>(new Map());
+  const hoveredDistrictIdRef = useRef<string | null>(null);
   const khoroosLayerGroup = useRef<L.LayerGroup | null>(null);
   const stationsLayerGroup = useRef<L.LayerGroup | null>(null);
   const stationBuffersLayerGroup = useRef<L.LayerGroup | null>(null);
@@ -338,7 +380,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
 
     const writeCoordsDom = (lat: number, lng: number) => {
       if (coordTextRef.current) {
-        coordTextRef.current.textContent = `Lat: ${lat.toFixed(4)}° N, Lon: ${lng.toFixed(4)}° E`;
+        coordTextRef.current.textContent = `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`;
       }
     };
 
@@ -359,17 +401,17 @@ export const RiskMap: React.FC<RiskMapProps> = ({
     labelsPane.style.pointerEvents = 'none';
 
     const baseTile = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       {
-        attribution: 'Tiles &copy; Esri World Imagery',
-        maxZoom: 18,
+        attribution: 'Tiles &copy; Esri Light Gray',
+        maxZoom: 16,
         keepBuffer: 2,
       }
     ).addTo(map);
 
     const labelsTile = L.tileLayer(
-      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 18, opacity: 0.92, pane: 'labelsPane', keepBuffer: 2 }
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 16, opacity: 0.9, pane: 'labelsPane', keepBuffer: 2 }
     ).addTo(map);
 
     baseTileLayerRef.current = baseTile;
@@ -475,7 +517,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
         }
       ).addTo(map);
 
-      setIs3DTilt(true);
+      setIs3DExtruded(true);
       const districtTopKhoroo = activeDistrict
         ? UB_KHOROOS.filter((k) => k.districtId === activeDistrict.id).sort(
             (a, b) => b.riskScore - a.riskScore
@@ -566,80 +608,217 @@ export const RiskMap: React.FC<RiskMapProps> = ({
   );
 
   const isDarkBasemap = tileStyle === 'satellite' || tileStyle === 'dark' || tileStyle === 'tactical3d';
-  const isTilted3D = tileStyle === 'tactical3d' && is3DTilt;
 
-  // 4. Render District Polygons
-  useEffect(() => {
-    const group = districtsLayerGroup.current;
-    if (!group) return;
-    group.clearLayers();
+  const polygonStateRef = useRef({
+    liveDistricts,
+    activeDistrictId: activeDistrict?.id ?? null,
+    showHeatmap,
+    isDarkBasemap,
+    tileStyle,
+    onSelectDistrict,
+  });
+  polygonStateRef.current = {
+    liveDistricts,
+    activeDistrictId: activeDistrict?.id ?? null,
+    showHeatmap,
+    isDarkBasemap,
+    tileStyle,
+    onSelectDistrict,
+  };
 
-    UB_DISTRICTS.forEach((d) => {
-      const isSelected = activeDistrict?.id === d.id;
+  const getDistrictFillColor = (riskLevel: DistrictData['riskLevel']) => {
+    if (riskLevel === 'very_high') return '#E93B2F';
+    if (riskLevel === 'high') return '#FF633C';
+    if (riskLevel === 'moderate') return '#F59E0B';
+    return '#12B89A';
+  };
 
-      let fillColor = '#12B89A';
-      if (d.riskLevel === 'very_high') fillColor = '#E93B2F';
-      else if (d.riskLevel === 'high') fillColor = '#FF633C';
-      else if (d.riskLevel === 'moderate') fillColor = '#F59E0B';
-
-      const isTactical = tileStyle === 'tactical3d';
+  const buildDistrictPolygonStyle = useCallback(
+    (
+      d: DistrictData,
+      isSelected: boolean,
+      isHovered: boolean,
+      styleTile: MapTileStyle,
+      darkBase: boolean,
+      heatVisible: boolean
+    ): L.PathOptions => {
+      const fillColor = getDistrictFillColor(d.riskLevel);
+      const isTactical = styleTile === 'tactical3d';
       const selectedStroke = isTactical
         ? 'rgba(96, 165, 250, 0.72)'
-        : isDarkBasemap
-        ? '#FFFFFF'
+        : darkBase
+        ? 'rgba(255, 138, 101, 0.95)'
         : '#0B124D';
       const defaultHeatStroke = isTactical
         ? 'rgba(59, 130, 246, 0.28)'
-        : isDarkBasemap
-        ? 'rgba(255,255,255,0.52)'
-        : 'rgba(11,18,77,0.42)';
+        : darkBase
+        ? 'rgba(148, 163, 184, 0.36)'
+        : 'rgba(11,18,77,0.45)';
 
-      const polygon = L.polygon(d.polygon, {
-        interactive: !isTactical,
-        color: isSelected ? selectedStroke : showHeatmap || isTactical ? defaultHeatStroke : fillColor,
-        weight: isSelected ? (isTactical ? 1.5 : 2.6) : showHeatmap || isTactical ? 1.15 : 1.5,
-        dashArray: isTactical || (!isSelected && showHeatmap) ? '4 4' : undefined,
-        opacity: isSelected ? 0.92 : 0.68,
+      if (heatVisible || isTactical) {
+        return {
+          color: isSelected || (isHovered && !isTactical) ? selectedStroke : defaultHeatStroke,
+          weight: isHovered && !isTactical ? 2.4 : isSelected ? (isTactical ? 1.4 : 2.1) : 1.1,
+          dashArray: '4 4',
+          opacity: isSelected || isHovered ? 0.92 : 0.65,
+          fillColor,
+          fillOpacity: isHovered && !isTactical ? 0.14 : 0,
+        };
+      }
+
+      // Default discrete choropleth mode: clear shaded fills + crisp hover feedback
+      const baseFill = darkBase ? 0.26 : 0.18;
+      return {
+        color: isSelected || isHovered ? selectedStroke : fillColor,
+        weight: isHovered ? 2.8 : isSelected ? 2.3 : 1.5,
+        dashArray: undefined,
+        opacity: isSelected || isHovered ? 0.96 : 0.75,
         fillColor,
-        // Keep polygon interiors clear when thermal surface or 3D Tactical obsidian mode is active
-        fillOpacity:
-          showHeatmap || isTactical ? 0 : isSelected ? satelliteOpacity + 0.08 : satelliteOpacity * 0.65,
+        fillOpacity: isHovered ? (darkBase ? 0.42 : 0.36) : isSelected ? baseFill + 0.12 : baseFill,
+      };
+    },
+    []
+  );
+
+  // 4a. Mount district polygons ONCE (never tear down layers on weather ticks or hover)
+  useEffect(() => {
+    const group = districtsLayerGroup.current;
+    if (!group || !mapInstance) return;
+    if (districtPolygonsRef.current.size > 0) return;
+
+    UB_DISTRICTS.forEach((seedDist) => {
+      const polygon = L.polygon(seedDist.polygon, {
+        interactive: true,
+        ...buildDistrictPolygonStyle(seedDist, false, false, tileStyle, isDarkBasemap, showHeatmap),
       });
 
-      if (!isTactical) {
-        polygon.on('click', () => {
-          setActiveDistrict(d);
-          setSelectedKhoroo(null);
-          setIsPanelOpen(true);
-          if (onSelectDistrict) onSelectDistrict(d.id);
-          if (mapInstanceRef.current) {
-            focusMap(mapInstanceRef.current, d.center, 12);
-          }
-        });
+      polygon.on('click', () => {
+        const st = polygonStateRef.current;
+        if (st.tileStyle === 'tactical3d') return;
+        const latest = st.liveDistricts.find((item) => item.id === seedDist.id) ?? seedDist;
+        setActiveDistrict(latest);
+        setSelectedKhoroo(null);
+        setIsPanelOpen(true);
+        if (st.onSelectDistrict) st.onSelectDistrict(latest.id);
+        if (mapInstanceRef.current) {
+          focusMap(mapInstanceRef.current, latest.center, 12);
+        }
+      });
 
-        polygon.bindTooltip(
-          `<div style="font-family: inherit; padding: 4px;">
+      polygon.on('mouseover', () => {
+        const st = polygonStateRef.current;
+        if (st.tileStyle === 'tactical3d') return;
+        hoveredDistrictIdRef.current = seedDist.id;
+        const latest = st.liveDistricts.find((item) => item.id === seedDist.id) ?? seedDist;
+        polygon.setStyle(
+          buildDistrictPolygonStyle(
+            latest,
+            st.activeDistrictId === seedDist.id,
+            true,
+            st.tileStyle,
+            st.isDarkBasemap,
+            st.showHeatmap
+          )
+        );
+        polygon.bringToFront();
+      });
+
+      polygon.on('mouseout', () => {
+        const st = polygonStateRef.current;
+        if (hoveredDistrictIdRef.current === seedDist.id) {
+          hoveredDistrictIdRef.current = null;
+        }
+        const latest = st.liveDistricts.find((item) => item.id === seedDist.id) ?? seedDist;
+        polygon.setStyle(
+          buildDistrictPolygonStyle(
+            latest,
+            st.activeDistrictId === seedDist.id,
+            false,
+            st.tileStyle,
+            st.isDarkBasemap,
+            st.showHeatmap
+          )
+        );
+      });
+
+      polygon.bindTooltip('', { sticky: true });
+      districtPolygonsRef.current.set(seedDist.id, polygon);
+      group.addLayer(polygon);
+    });
+
+    return () => {
+      districtPolygonsRef.current.clear();
+    };
+  }, [mapInstance, buildDistrictPolygonStyle, setActiveDistrict, setSelectedKhoroo]);
+
+  // 4b. Lightweight in-place style & tooltip sync (zero clearLayers flicker)
+  useEffect(() => {
+    const isTactical = tileStyle === 'tactical3d';
+    liveDistricts.forEach((d) => {
+      const polygon = districtPolygonsRef.current.get(d.id);
+      if (!polygon) return;
+
+      const isSelected = activeDistrict?.id === d.id;
+      const isHovered = hoveredDistrictIdRef.current === d.id && !isTactical;
+      const fillColor = getDistrictFillColor(d.riskLevel);
+      polygon.setStyle(
+        buildDistrictPolygonStyle(d, isSelected, isHovered, tileStyle, isDarkBasemap, showHeatmap)
+      );
+
+      const el = polygon.getElement() as HTMLElement | undefined;
+      if (el) {
+        el.style.pointerEvents = isTactical ? 'none' : 'auto';
+        el.style.cursor = isTactical ? 'default' : 'pointer';
+      }
+
+      if (!isTactical) {
+        const distW = live.districts[d.id];
+        const axis = fireState.districtThreeAxis.get(d.id);
+        const probLine =
+          axis && axis.ignitionProbability.unlocked && axis.ignitionProbability.probabilityPct !== null
+            ? `${isMn ? 'Магадлал' : 'Prob'}: <b>${axis.ignitionProbability.probabilityPct}%</b>`
+            : `${isMn ? 'Магадлал' : 'Prob'}: <span>${isMn ? 'Түгжигдсэн' : 'Locked'}</span>`;
+        const weatherLine = distW
+          ? ` · FWI ${distW.fireWeatherIndex} (${distW.tempCelsius}°C, ${distW.windSpeedKmh} ${isMn ? 'км/ц' : 'km/h'})`
+          : '';
+        const confLine = escapeHtml(locationConfidenceLabel(d.locationConfidence, isMn));
+
+        polygon.setTooltipContent(
+          `<div style="font-family: inherit; padding: 6px; font-size: 12px; line-height: 1.45;">
             <div style="font-weight: 700; color: #0B124D; font-size: 13px;">${escapeHtml(
               isMn ? `${d.nameMn} дүүрэг` : `${d.nameEn} District`
             )}</div>
-            <div style="font-size: 11px; color: #72778A;">
-              ${escapeHtml(t.riskIndicatorTitle)}: <b style="color:${fillColor}">${d.riskScore}/100</b>
+            <div style="font-size: 12px; color: #4B5563;">
+              ${escapeHtml(t.riskIndicatorTitle)}: <b style="color:${fillColor}">${d.riskScore}/100</b> · ${probLine}
             </div>
-            <div style="font-size: 10px; color: #0B124D; margin-top: 2px;">
-              ${isMn ? `${d.khoroosCount} хороотой · Дарж нарийвчлах` : `${d.khoroosCount} khoroos · Click to inspect`}
+            <div style="font-size: 12px; color: #0B124D; margin-top: 2px;">
+              ${isMn ? `${d.khoroosCount} хороо${weatherLine}` : `${d.khoroosCount} khoroos${weatherLine}`}
             </div>
-          </div>`,
-          { sticky: true }
+            <div style="font-size: 12px; color: #6B7280; margin-top: 2px;">
+              ${confLine}
+            </div>
+          </div>`
         );
+      } else {
+        polygon.closeTooltip();
       }
-
-      group.addLayer(polygon);
     });
-  }, [activeDistrict, satelliteOpacity, showHeatmap, isDarkBasemap, tileStyle, isMn, onSelectDistrict, t.riskIndicatorTitle]);
+  }, [
+    liveDistricts,
+    live.districts,
+    fireState.districtThreeAxis,
+    activeDistrict,
+    showHeatmap,
+    isDarkBasemap,
+    tileStyle,
+    isMn,
+    t.riskIndicatorTitle,
+    buildDistrictPolygonStyle,
+  ]);
 
-  // 5. Thermal surface points derived from actual geospatial dataset with tight settlement radii
+  // 5. Deduplicated Thermal Surface Points (merged urban corridors + live-weather khoroos + k-anonymous verified clusters)
   const heatPoints = useMemo<HeatPoint[]>(() => {
-    const hotspots: HeatPoint[] = UB_HEATMAP_HOTSPOTS.map(([lat, lng, radius, name, dangerScore]) => ({
+    const corridors = UB_HEATMAP_HOTSPOTS.map(([lat, lng, radius, name, dangerScore]) => ({
       lat,
       lng,
       radiusMeters: radius,
@@ -649,7 +828,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       isModelled: false,
     }));
 
-    const fromKhoroos: HeatPoint[] = UB_KHOROOS.map((k) => ({
+    const fromKhoroos = liveKhoroos.map((k) => ({
       lat: k.center[0],
       lng: k.center[1],
       radiusMeters: 620 + Math.round(k.gerHouseholdPercent * 5.2),
@@ -659,18 +838,44 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       isModelled: k.isModelled,
     }));
 
-    return [...hotspots, ...fromKhoroos];
-  }, [isMn]);
+    const verifiedClusters = fireState.publicClusters
+      .filter((cl) => cl.kAnonymitySatisfied)
+      .map((cl) => {
+        const score = Math.min(96, Math.max(55, 58 + cl.incidentCount * 3 + cl.criticalCount * 5));
+        return {
+          lat: cl.lat,
+          lng: cl.lng,
+          radiusMeters: 900,
+          score,
+          label: isMn
+            ? `${cl.khorooNumber}-р хороо (Баталгаажсан бүлэг: ${cl.incidentCount})`
+            : `Khoroo ${cl.khorooNumber} (Verified cluster: ${cl.incidentCount})`,
+          labelValue: `${score}/100`,
+          isModelled: false,
+        };
+      });
 
-  const ubAverageRisk = CITY_AVERAGE_RISK;
+    const merged = mergeSpatialHeatSources(corridors, [...fromKhoroos, ...verifiedClusters]);
+    return merged.map((m) => ({
+      lat: m.lat,
+      lng: m.lng,
+      radiusMeters: m.radiusMeters,
+      score: m.score,
+      label: m.label,
+      labelValue: m.labelValue ?? `${m.score}/100`,
+      isModelled: m.isModelled,
+    }));
+  }, [isMn, liveKhoroos, fireState.publicClusters]);
+
+  const ubAverageRisk = fireState.cityAverageRisk;
 
   // 6. Render Khoroo Markers
   const visibleKhoroos = useMemo(() => {
     if (khorooMode === 'none') return [];
-    if (khorooMode === 'all') return UB_KHOROOS;
+    if (khorooMode === 'all') return liveKhoroos;
     if (!activeDistrict) return [];
-    return UB_KHOROOS.filter((k) => k.districtId === activeDistrict.id);
-  }, [khorooMode, activeDistrict]);
+    return liveKhoroos.filter((k) => k.districtId === activeDistrict.id);
+  }, [khorooMode, activeDistrict, liveKhoroos]);
 
   const isDetailedZoom = mapZoom >= 13;
   const isStreetZoom = mapZoom >= 14;
@@ -706,25 +911,25 @@ export const RiskMap: React.FC<RiskMapProps> = ({
             <div style="
               display: inline-flex;
               align-items: center;
-              gap: 5px;
-              background: rgba(11, 18, 77, 0.92);
+              gap: 6px;
+              background: rgba(11, 18, 77, 0.94);
               color: #FFFFFF;
-              padding: 3px 9px;
+              padding: 4px 10px;
               border-radius: 9999px;
               border: 1.5px solid ${badgeBg};
               box-shadow: 0 3px 10px rgba(0,0,0,0.28);
               cursor: pointer;
               white-space: nowrap;
-              font-size: 10.5px;
+              font-size: 12px;
               font-weight: 700;
             ">
-              <span style="width: 6px; height: 6px; border-radius: 50%; background: ${badgeBg};"></span>
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: ${badgeBg};"></span>
               <span>${escapeHtml(isMn ? dist.nameMn : dist.nameEn)}</span>
-              <span style="font-family: monospace; font-size: 10px; opacity: 0.85;">${count} ${isMn ? 'хороо' : 'kh'}</span>
+              <span style="font-family: monospace; font-size: 12px; opacity: 0.9;">${count} ${isMn ? 'хороо' : 'kh'}</span>
             </div>
           `,
-          iconSize: [130, 24],
-          iconAnchor: [65, 12],
+          iconSize: [148, 28],
+          iconAnchor: [74, 14],
         });
 
         const clusterMarker = L.marker(dist.center, { icon: clusterIcon });
@@ -750,17 +955,17 @@ export const RiskMap: React.FC<RiskMapProps> = ({
           className: 'custom-khoroo-marker',
           html: `
             <div style="
-              display: inline-flex; align-items: center; gap: 4px;
-              background: #0B124D; color: #FFFFFF; padding: 2px 7px;
+              display: inline-flex; align-items: center; gap: 5px;
+              background: #0B124D; color: #FFFFFF; padding: 3px 8px;
               border-radius: 9999px; border: 1.5px solid ${selColor};
-              box-shadow: 0 3px 10px rgba(0,0,0,0.28); font-size: 10.5px; font-weight: 700; white-space: nowrap;
+              box-shadow: 0 3px 10px rgba(0,0,0,0.28); font-size: 12px; font-weight: 700; white-space: nowrap;
             ">
               <span>${escapeHtml(isMn ? `${selectedKhoroo.khorooNumber}-р` : `Kh.${selectedKhoroo.khorooNumber}`)}</span>
-              <span style="font-family: monospace; font-size: 10px;">${selectedKhoroo.riskScore}</span>
+              <span style="font-family: monospace; font-size: 12px;">${selectedKhoroo.riskScore}</span>
             </div>
           `,
-          iconSize: [68, 22],
-          iconAnchor: [34, 11],
+          iconSize: [78, 26],
+          iconAnchor: [39, 13],
         });
         group.addLayer(L.marker(selectedKhoroo.center, { icon: selIcon }));
       }
@@ -783,34 +988,34 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                 <div style="
                   display: inline-flex;
                   align-items: center;
-                  gap: 4px;
+                  gap: 5px;
                   background: ${isSelected ? '#0B124D' : 'rgba(255, 255, 255, 0.96)'};
                   color: ${isSelected ? '#FFFFFF' : '#0B124D'};
-                  padding: 2px 7px;
+                  padding: 3px 8px;
                   border-radius: 9999px;
                   border: 1.5px solid ${badgeBg};
                   box-shadow: 0 3px 10px rgba(0,0,0,0.22);
                   cursor: pointer;
                   white-space: nowrap;
-                  font-size: 10.5px;
+                  font-size: 12px;
                   font-weight: 700;
                   transform: ${isSelected ? 'scale(1.08)' : 'scale(1)'};
                   transition: transform 0.15s ease;
                 ">
                   <span style="width: 6px; height: 6px; border-radius: 50%; background: ${badgeBg};"></span>
                   <span>${escapeHtml(isMn ? `${kh.khorooNumber}-р` : `Kh.${kh.khorooNumber}`)}</span>
-                  <span style="font-family: monospace; font-size: 10px; padding: 0.5px 4px; border-radius: 4px; background: ${badgeBg}; color: white;">${kh.riskScore}</span>
+                  <span style="font-family: monospace; font-size: 12px; padding: 0.5px 4px; border-radius: 4px; background: ${badgeBg}; color: white;">${kh.riskScore}</span>
                 </div>
               `,
-              iconSize: [72, 22],
-              iconAnchor: [36, 11],
+              iconSize: [82, 26],
+              iconAnchor: [41, 13],
             })
           : L.divIcon({
               className: 'custom-khoroo-node-marker',
               html: `
                 <div style="
-                  width: 22px;
-                  height: 22px;
+                  width: 26px;
+                  height: 26px;
                   border-radius: 50%;
                   background: rgba(255,255,255,0.96);
                   color: #0B124D;
@@ -819,7 +1024,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                   display: flex;
                   align-items: center;
                   justify-content: center;
-                  font-size: 9.5px;
+                  font-size: 12px;
                   font-weight: 800;
                   font-family: monospace;
                   cursor: pointer;
@@ -827,8 +1032,8 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                 `${isMn ? `${kh.khorooNumber}-р хороо` : `Khoroo ${kh.khorooNumber}`} (${kh.riskScore}/100)`
               )}">${kh.khorooNumber}</div>
               `,
-              iconSize: [22, 22],
-              iconAnchor: [11, 11],
+              iconSize: [26, 26],
+              iconAnchor: [13, 13],
             });
 
       const marker = L.marker(kh.center, { icon: khorooIcon });
@@ -842,23 +1047,21 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       });
 
       const khLevelText = riskLevelLabel(kh.riskLevel, isMn);
+      const khConfText = escapeHtml(locationConfidenceLabel(kh.locationConfidence, isMn));
       marker.bindTooltip(
-        `<div style="font-family: inherit; padding: 4px;">
-          <div style="font-weight: 700; color: #0B124D; font-size: 12px;">${escapeHtml(
+        `<div style="font-family: inherit; padding: 6px; font-size: 12px; line-height: 1.4;">
+          <div style="font-weight: 700; color: #0B124D; font-size: 13px;">${escapeHtml(
             isMn ? kh.nameMn : kh.nameEn
-          )}${
-            kh.isModelled
-              ? `<span style="font-size:9px;font-weight:600;color:#72778A;"> · ${
-                  isMn ? 'загварчилсан' : 'modelled'
-                }</span>`
-              : ''
-          }</div>
-          <div style="font-size: 11px; color: ${badgeBg}; font-weight: 700;">
+          )}</div>
+          <div style="font-size: 12px; color: ${badgeBg}; font-weight: 700;">
             ${isMn ? 'Эрсдэлийн индекс' : 'Risk index'}: ${kh.riskScore}/100 (${escapeHtml(khLevelText)})
           </div>
-          <div style="font-size: 10px; color: #72778A; margin-top: 2px;">
+          <div style="font-size: 12px; color: #4B5563; margin-top: 2px;">
             ${isMn ? 'Гэр хороолол' : 'Ger households'}: ${kh.gerHouseholdPercent}% ·
             ${isMn ? 'Ирэх хугацаа' : 'Response'}: ~${kh.avgResponseTimeMin} ${isMn ? 'мин' : 'min'}
+          </div>
+          <div style="font-size: 12px; color: #6B7280; margin-top: 2px;">
+            ${khConfText}
           </div>
         </div>`,
         { sticky: true }
@@ -920,7 +1123,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: ${isDetailedZoom ? 13 : 11}px;
+            font-size: ${isDetailedZoom ? 14 : 12}px;
             cursor: pointer;
           ">🚒</div>
         `,
@@ -930,14 +1133,17 @@ export const RiskMap: React.FC<RiskMapProps> = ({
 
       const marker = L.marker(sta.coordinates, { icon: stationIcon });
       marker.bindTooltip(
-        `<div style="font-family: inherit; padding: 4px;">
+        `<div style="font-family: inherit; padding: 6px; font-size: 12px; line-height: 1.4;">
           <div style="font-weight: 700; color: #0B124D; font-size: 12px;">🚒 ${escapeHtml(
             isMn ? sta.nameMn : sta.nameEn
           )} (${escapeHtml(stationCodeLabel(sta.code, isMn))})</div>
-          <div style="font-size: 10px; color: #72778A;">
+          <div style="font-size: 12px; color: #4B5563;">
             ${isMn
               ? `ОБЕГ харьяа анги · Хүрэх тойрог: ~${sta.coverageRadiusKm} км`
               : `NEMA unit · Coverage radius: ~${sta.coverageRadiusKm} km`}
+          </div>
+          <div style="font-size: 12px; color: #6B7280;">
+            ${escapeHtml(locationConfidenceLabel(sta.locationConfidence, isMn))}
           </div>
         </div>`,
         { sticky: true }
@@ -956,7 +1162,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
 
     DEMO_HISTORICAL_INCIDENTS.forEach((inc) => {
       const circle = L.circleMarker(inc.coordinates, {
-        radius: 4.5,
+        radius: 5,
         fillColor: inc.severity === 'critical' ? '#E93B2F' : '#FF633C',
         color: '#FFFFFF',
         weight: 1.5,
@@ -965,7 +1171,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       });
 
       circle.bindTooltip(
-        `<div style="font-family: inherit; font-size: 10px; padding: 2px;">
+        `<div style="font-family: inherit; font-size: 12px; padding: 4px;">
           <b>${escapeHtml(inc.date)}</b>: ${escapeHtml(isMn ? inc.causeGuessMn : inc.causeGuessEn)}
         </div>`
       );
@@ -1024,42 +1230,76 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       }
       setSelectedKhoroo(kh);
       setIsPanelOpen(true);
-      if (mapInstanceRef.current) focusMap(mapInstanceRef.current, kh.center, 14);
+      if (mapInstanceRef.current) {
+        focusMap(mapInstanceRef.current, kh.center, tileStyle === 'tactical3d' ? 15 : 14);
+      }
     }
   };
 
-  const updateScrollStatus = () => {
-    const el = carouselRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
-  };
-
-  useEffect(() => {
-    updateScrollStatus();
-    window.addEventListener('resize', updateScrollStatus);
-    return () => window.removeEventListener('resize', updateScrollStatus);
-  }, [isPanelOpen]);
-
-  const handleScroll = (dir: 'left' | 'right') => {
-    if (!carouselRef.current) return;
-    carouselRef.current.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' });
-    setTimeout(updateScrollStatus, 320);
-  };
-
   const displayedDistricts = useMemo(() => {
-    const list = [...UB_DISTRICTS];
+    const list = [...liveDistricts];
     if (sortBy === 'risk_desc') return list.sort((a, b) => b.riskScore - a.riskScore);
     if (sortBy === 'alpha') return list.sort((a, b) => a.nameMn.localeCompare(b.nameMn));
     return list;
-  }, [sortBy]);
+  }, [sortBy, liveDistricts]);
+
+  const topFiveHighRiskZones = useMemo(
+    () =>
+      [...liveKhoroos]
+        .sort((a, b) => b.riskScore - a.riskScore)
+        .slice(0, 5)
+        .map((kh) => ({
+          khoroo: kh,
+          district: liveDistricts.find((d) => d.id === kh.districtId) ?? UB_DISTRICTS[0],
+        })),
+    [liveKhoroos, liveDistricts]
+  );
 
   const activeDistrictKhoroos = useMemo(() => {
     if (!activeDistrict) return [];
-    return UB_KHOROOS.filter((k) => k.districtId === activeDistrict.id).sort(
-      (a, b) => b.riskScore - a.riskScore
-    );
-  }, [activeDistrict]);
+    return liveKhoroos
+      .filter((k) => k.districtId === activeDistrict.id)
+      .sort((a, b) => b.riskScore - a.riskScore);
+  }, [activeDistrict, liveKhoroos]);
+
+  const tacticalBaseFootprints = useMemo(
+    () => generateCityBlueFootprints(liveKhoroos),
+    [liveKhoroos]
+  );
+
+  const tacticalScene = useMemo(() => {
+    if (tileStyle !== 'tactical3d' || liveKhoroos.length === 0) return null;
+    return buildTactical3DScene({
+      activeDistrict,
+      selectedKhoroo,
+      khoroos: liveKhoroos,
+      stations: UB_FIRE_STATIONS,
+      baseFootprints: tacticalBaseFootprints,
+      assumptions,
+    });
+  }, [tileStyle, activeDistrict, selectedKhoroo, liveKhoroos, tacticalBaseFootprints, assumptions]);
+
+  const handleFocusTacticalZone = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !tacticalScene) return;
+    focusMap(map, tacticalScene.targetCoord, 15, 0.42);
+  }, [tacticalScene]);
+
+  const handleFitTacticalRoute = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !tacticalScene) return;
+    const bounds = L.latLngBounds([
+      tacticalScene.targetCoord,
+      tacticalScene.nearestStation.coordinates,
+    ]);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    map.fitBounds(bounds, {
+      paddingTopLeft: [isMobile ? 36 : 84, isMobile ? 164 : 176],
+      paddingBottomRight: [isMobile || !isPanelOpen ? 48 : 440, isMobile && isPanelOpen ? 270 : 140],
+      maxZoom: 15,
+      animate: true,
+    });
+  }, [tacticalScene, isPanelOpen]);
 
   const handleAnalyzeCurrentArea = () => {
     setGeoError(null);
@@ -1148,23 +1388,23 @@ export const RiskMap: React.FC<RiskMapProps> = ({
         preventing any control overlap with the right detail drawer.
       */}
       <div
-        className={`absolute top-4 left-3 right-3 sm:top-5 sm:left-4 z-[900] flex flex-col items-start gap-2 pointer-events-none transition-all duration-300 ${
+        className={`absolute top-3 left-3 right-3 sm:top-4 sm:left-4 z-[900] flex flex-col items-start gap-2 pointer-events-none transition-all duration-300 ${
           isPanelOpen ? 'lg:right-[424px]' : 'lg:right-4'
         }`}
       >
-        {/* Row 1: Unified Floating Command Bar + Live Weather Ticker */}
+        {/* Single Unified Compact Floating Header Bar */}
         <div className="relative z-30 flex items-center justify-between gap-2 w-full pointer-events-auto">
-          {/* Unified Left Command Bar */}
-          <div className="flex items-center gap-1 bg-white/95 rounded-2xl border border-black/[0.08] shadow-md p-1 flex-1 xl:flex-none min-w-0">
+          <div className="flex items-center flex-wrap sm:flex-nowrap gap-1 bg-white/95 rounded-2xl border border-black/[0.08] shadow-md p-1 flex-1 xl:flex-none min-w-0">
             {/* Search Input */}
-            <div className={`relative flex-1 min-w-[76px] sm:flex-none ${isPanelOpen ? 'sm:w-36 md:w-40 2xl:w-48' : 'sm:w-44 md:w-48'}`}>
+            <div className={`relative flex-1 min-w-[92px] sm:flex-none ${isPanelOpen ? 'sm:w-36 md:w-44' : 'sm:w-44 md:w-52'}`}>
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#72778A] pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder={isMn ? 'Хайх...' : 'Search...'}
-                className="w-full h-8 pl-7 sm:pl-8 pr-6 bg-slate-100 hover:bg-slate-200/70 focus:bg-white rounded-xl text-xs text-[#0B124D] placeholder-[#72778A] focus:outline-none focus:ring-2 focus:ring-[#FF633C]/70 transition-colors"
+                placeholder={isMn ? 'Дүүрэг, хороо...' : 'Search...'}
+                aria-label={isMn ? 'Дүүрэг эсвэл хороо хайх' : 'Search district or khoroo'}
+                className="w-full min-h-[44px] pl-8 pr-11 bg-slate-100 hover:bg-slate-200/70 focus:bg-white rounded-xl text-xs text-[#0B124D] placeholder-[#72778A] focus:outline-none focus:ring-2 focus:ring-[#FF633C]/70 transition-colors"
               />
               {searchQuery && (
                 <button
@@ -1173,14 +1413,14 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                     setSearchResults([]);
                   }}
                   aria-label={isMn ? 'Хайлт цэвэрлэх' : 'Clear search'}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 w-5 h-5 flex items-center justify-center rounded-lg"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 w-10 h-10 flex items-center justify-center rounded-lg"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
 
               {searchResults.length > 0 && (
-                <div className="absolute top-full left-0 w-64 sm:w-full mt-2 bg-white rounded-2xl shadow-2xl border border-black/[0.08] overflow-hidden z-[970] p-1 divide-y divide-black/[0.04] max-h-56 overflow-y-auto">
+                <div className="absolute top-full left-0 w-72 sm:w-80 mt-2 bg-white rounded-2xl shadow-2xl border border-black/[0.08] overflow-hidden z-[970] p-1.5 divide-y divide-black/[0.04] max-h-64 overflow-y-auto">
                   {searchResults.map((res) => {
                     const isDist = res.type === 'district';
                     const d = res.item as DistrictData;
@@ -1190,15 +1430,15 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                       <button
                         key={isDist ? d.id : kh.id}
                         onClick={() => selectSearchResult(res)}
-                        className="w-full text-left p-2 hover:bg-[#F7F8FA] rounded-xl flex items-center justify-between text-xs transition-colors"
+                        className="w-full text-left min-h-[44px] px-2.5 py-2 hover:bg-[#F7F8FA] rounded-xl flex items-center justify-between text-xs transition-colors"
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <span className="text-[11px]">{isDist ? '🏙️' : '📍'}</span>
+                          <span className="text-xs">{isDist ? '🏙️' : '📍'}</span>
                           <span className="font-bold text-[#0B124D] truncate">
                             {isDist ? (isMn ? d.nameMn : d.nameEn) : isMn ? kh.nameMn : kh.nameEn}
                           </span>
                         </div>
-                        <span className="font-mono text-[10px] font-bold text-[#FF633C] shrink-0 ml-1">
+                        <span className="font-mono text-xs font-bold text-[#FF633C] shrink-0 ml-1">
                           {isDist ? d.riskScore : kh.riskScore}/100
                         </span>
                       </button>
@@ -1208,14 +1448,237 @@ export const RiskMap: React.FC<RiskMapProps> = ({
               )}
             </div>
 
-            <div className="h-5 w-px bg-slate-200/90 shrink-0" />
+            <div className="h-5 w-px bg-slate-200/90 shrink-0 hidden sm:block" />
+
+            {/* Consolidated Districts & Top-5 High-Risk Zones Filter Popover */}
+            <div className="relative shrink-0" ref={districtFilterRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBasemapDropdown(false);
+                  setShowLayersDropdown(false);
+                  setShowDistrictFilter((v) => !v);
+                }}
+                aria-expanded={showDistrictFilter}
+                className={`min-h-[44px] px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  showDistrictFilter
+                    ? 'bg-[#0B124D] text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200/70 text-[#0B124D]'
+                }`}
+                title={isMn ? 'Дүүрэг, хороо ба Эхний 5 өндөр эрсдэлтэй бүс' : 'Districts, Khoroos & Top-5 High-Risk Zones'}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate max-w-[120px] sm:max-w-[150px]">
+                  {activeDistrict
+                    ? `${isMn ? activeDistrict.nameMn : activeDistrict.nameEn} · ${activeDistrict.riskScore}`
+                    : isMn
+                    ? 'Бүх УБ · Эхний 5'
+                    : 'All UB · Top 5'}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${showDistrictFilter ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showDistrictFilter && (
+                <div className="absolute top-full left-0 mt-2.5 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.1] p-3 z-[965] text-xs space-y-3 animate-pop-in">
+                  {/* Quick Header & All UB Reset + Sort */}
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleResetToAllUB();
+                        setShowDistrictFilter(false);
+                      }}
+                      className={`min-h-[38px] px-3 rounded-xl font-bold flex items-center gap-1.5 transition-colors ${
+                        !activeDistrict
+                          ? 'bg-[#0B124D] text-white'
+                          : 'bg-slate-100 hover:bg-slate-200 text-[#0B124D]'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>{isMn ? 'Бүх Улаанбаатар' : 'All Ulaanbaatar'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSortBy(sortBy === 'risk_desc' ? 'default' : 'risk_desc')}
+                      className={`min-h-[38px] px-2.5 rounded-xl font-mono font-bold flex items-center gap-1 transition-colors ${
+                        sortBy === 'risk_desc'
+                          ? 'bg-amber-500/15 text-amber-800 border border-amber-500/30'
+                          : 'bg-slate-100 text-[#4B5563] hover:text-[#0B124D]'
+                      }`}
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{sortBy === 'risk_desc' ? (isMn ? 'Эрсдэлээр' : 'Top Risk') : isMn ? 'Бүсээр' : 'Default'}</span>
+                    </button>
+                  </div>
+
+                  {/* Top-5 High-Risk Zones Quick Jump */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-mono font-bold uppercase text-[#E93B2F]">
+                        {isMn ? 'Өндөр эрсдэлтэй эхний 5 бүс' : 'Top-5 High-Risk Zones'}
+                      </span>
+                      <span className="text-xs font-mono text-[#72778A]">0–100</span>
+                    </div>
+                    <div className="space-y-1">
+                      {topFiveHighRiskZones.map(({ khoroo, district }, idx) => (
+                        <button
+                          key={khoroo.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveDistrict(district);
+                            setSelectedKhoroo(khoroo);
+                            setIsPanelOpen(true);
+                            setShowDistrictFilter(false);
+                            if (onSelectDistrict && district.id !== selectedDistrictId) {
+                              onSelectDistrict(district.id);
+                            }
+                            if (mapInstanceRef.current) {
+                              focusMap(mapInstanceRef.current, khoroo.center, tileStyle === 'tactical3d' ? 15 : 14);
+                            }
+                          }}
+                          className="w-full min-h-[40px] px-2.5 py-1.5 rounded-xl bg-red-50/60 hover:bg-red-100/70 border border-red-200/60 flex items-center justify-between gap-2 text-left transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-[#E93B2F] text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-[#0B124D] truncate">
+                                {isMn ? district.nameMn : district.nameEn} · {khorooLabel(khoroo.khorooNumber, isMn)}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-[#E93B2F] shrink-0">
+                            {khoroo.riskScore}/100
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 9 Districts Selector */}
+                  <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                    <span className="text-xs font-mono font-bold uppercase text-[#72778A] px-1 block">
+                      {isMn ? '9 Дүүрэг' : '9 Districts'}
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {displayedDistricts.map((d) => {
+                        const isSel = activeDistrict?.id === d.id && !selectedKhoroo;
+                        const isVeryHigh = d.riskScore >= 75;
+                        const isHigh = d.riskScore >= 55 && d.riskScore < 75;
+                        return (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveDistrict(d);
+                              setSelectedKhoroo(null);
+                              setIsPanelOpen(true);
+                              setShowDistrictFilter(false);
+                              if (onSelectDistrict && d.id !== selectedDistrictId) {
+                                onSelectDistrict(d.id);
+                              } else if (mapInstanceRef.current) {
+                                if (tileStyle === 'tactical3d') {
+                                  const topKhoroo = UB_KHOROOS.filter((k) => k.districtId === d.id).sort(
+                                    (a, b) => b.riskScore - a.riskScore
+                                  )[0];
+                                  focusMap(mapInstanceRef.current, topKhoroo?.center ?? d.center, 15);
+                                } else {
+                                  focusMap(mapInstanceRef.current, d.center, 12);
+                                }
+                              }
+                            }}
+                            className={`min-h-[40px] px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-1.5 text-xs font-semibold transition-all border ${
+                              isSel
+                                ? 'bg-[#0B124D] text-white border-[#0B124D] font-bold shadow-xs'
+                                : 'bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] border-slate-200'
+                            }`}
+                          >
+                            <span className="truncate">{isMn ? d.nameMn : d.nameEn}</span>
+                            <span
+                              className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded leading-none shrink-0 ${
+                                isSel
+                                  ? 'bg-white/20 text-white'
+                                  : isVeryHigh
+                                  ? 'bg-red-100 text-[#E93B2F]'
+                                  : isHigh
+                                  ? 'bg-orange-100 text-[#FF633C]'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {d.riskScore}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Selected District Top Khoroos */}
+                  {activeDistrict && activeDistrictKhoroos.length > 0 && (
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-mono font-bold uppercase text-[#72778A] flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-[#FF633C]" />
+                          {isMn
+                            ? `${activeDistrict.nameMn} (${activeDistrict.khoroosCount} хороо)`
+                            : `${activeDistrict.nameEn} (${activeDistrict.khoroosCount} khoroos)`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsPanelOpen(true);
+                            setShowDistrictFilter(false);
+                          }}
+                          className="text-xs font-mono font-semibold text-[#0B124D] hover:text-[#FF633C] underline"
+                        >
+                          {isMn ? 'Бүгдийг харах →' : 'View all →'}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {activeDistrictKhoroos.slice(0, 8).map((kh) => {
+                          const isSelKh = selectedKhoroo?.id === kh.id;
+                          return (
+                            <button
+                              key={kh.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedKhoroo(kh);
+                                setIsPanelOpen(true);
+                                setShowDistrictFilter(false);
+                                if (mapInstanceRef.current) {
+                                  focusMap(mapInstanceRef.current, kh.center, tileStyle === 'tactical3d' ? 15 : 14);
+                                }
+                              }}
+                              className={`min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+                                isSelKh
+                                  ? 'bg-[#FF633C] text-white border-[#FF633C] font-bold'
+                                  : 'bg-[#F7F8FA] hover:bg-slate-100 text-[#0B124D] border-slate-200'
+                              }`}
+                            >
+                              <span>{khorooLabel(kh.khorooNumber, isMn)}</span>
+                              <span className={`font-mono font-bold ${isSelKh ? 'text-white' : 'text-[#72778A]'}`}>
+                                {kh.riskScore}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="h-5 w-px bg-slate-200/90 shrink-0 hidden sm:block" />
 
             {/* Satellite / Selectable Basemap Switcher */}
             <div className="relative shrink-0" ref={basemapDropdownRef}>
               <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs">
                 <button
                   onClick={() => handleTileChange('satellite')}
-                  className={`h-7 px-2 sm:px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  className={`min-h-[44px] px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
                     tileStyle === 'satellite'
                       ? 'bg-[#FF633C] text-white shadow-xs'
                       : 'text-[#72778A] hover:text-[#0B124D]'
@@ -1223,18 +1686,19 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                   title={isMn ? 'Хиймэл дагуулын бодит зураг' : 'Real satellite imagery'}
                 >
                   <Satellite className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-[11px] sm:text-xs">{isMn ? 'Бодит' : 'Satellite'}</span>
+                  <span className="text-xs hidden sm:inline">{isMn ? 'Бодит' : 'Satellite'}</span>
                 </button>
                 <button
                   onClick={() => {
                     setShowLayersDropdown(false);
+                    setShowDistrictFilter(false);
                     if (tileStyle === 'satellite') {
                       handleTileChange(lastMapStyle);
                     } else {
                       setShowBasemapDropdown((v) => !v);
                     }
                   }}
-                  className={`h-7 px-2 sm:px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1 ${
+                  className={`min-h-[44px] px-2.5 rounded-lg font-semibold transition-all flex items-center gap-1 ${
                     tileStyle !== 'satellite'
                       ? 'bg-[#0B124D] text-white shadow-xs'
                       : 'text-[#72778A] hover:text-[#0B124D]'
@@ -1242,7 +1706,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                   title={isMn ? 'Энгийн зураг ба дэвсгэр сонгох' : 'Normal map & basemap styles'}
                 >
                   <MapIcon className="w-3.5 h-3.5 shrink-0 hidden sm:inline" />
-                  <span className="text-[11px] sm:text-xs">
+                  <span className="text-xs">
                     {tileStyle !== 'satellite'
                       ? isMn
                         ? activeMapOption.shortMn
@@ -1256,11 +1720,12 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                   type="button"
                   onClick={() => {
                     setShowLayersDropdown(false);
+                    setShowDistrictFilter(false);
                     setShowBasemapDropdown((v) => !v);
                   }}
                   aria-label={isMn ? 'Газрын зургийн төрөл сонгох' : 'Choose map basemap style'}
                   aria-expanded={showBasemapDropdown}
-                  className={`h-7 px-1 rounded-lg transition-colors flex items-center justify-center ${
+                  className={`min-h-[44px] min-w-[44px] px-2 rounded-lg transition-colors flex items-center justify-center ${
                     showBasemapDropdown
                       ? 'bg-white text-[#0B124D] shadow-xs'
                       : 'text-[#72778A] hover:text-[#0B124D]'
@@ -1272,14 +1737,14 @@ export const RiskMap: React.FC<RiskMapProps> = ({
               </div>
 
               {showBasemapDropdown && (
-                <div className="absolute top-full left-0 mt-2.5 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.1] p-2 w-64 z-[960] text-xs space-y-1 animate-pop-in">
-                  <div className="text-[10px] font-mono uppercase text-[#72778A] font-bold px-2 py-0.5 flex items-center justify-between">
+                <div className="absolute top-full right-0 sm:left-0 mt-2.5 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.1] p-2 w-72 z-[960] text-xs space-y-1 animate-pop-in">
+                  <div className="text-xs font-mono uppercase text-[#72778A] font-bold px-2 py-0.5 flex items-center justify-between">
                     <span>{isMn ? 'Газрын зургийн хэлбэр' : 'Map basemap style'}</span>
-                    <span className="text-[9px] text-[#FF633C] font-bold">{1 + BASEMAP_OPTIONS.length}</span>
+                    <span className="text-xs text-[#FF633C] font-bold">{1 + BASEMAP_OPTIONS.length}</span>
                   </div>
                   <button
                     onClick={() => handleTileChange('satellite')}
-                    className={`w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors ${
+                    className={`w-full text-left min-h-[44px] px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors ${
                       tileStyle === 'satellite'
                         ? 'bg-[#FF633C]/12 text-[#0B124D] ring-1 ring-[#FF633C]/40 font-bold'
                         : 'hover:bg-slate-100 text-[#0B124D]'
@@ -1293,7 +1758,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold truncate">{isMn ? 'Бодит (Хиймэл дагуул)' : 'Satellite Imagery'}</div>
-                      <div className="text-[10px] text-[#72778A] truncate">
+                      <div className="text-xs text-[#72778A] truncate">
                         {isMn ? 'Өндөр нарийвчлалтай сансрын зураг' : 'Esri World Imagery + Labels'}
                       </div>
                     </div>
@@ -1308,7 +1773,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                       <button
                         key={opt.id}
                         onClick={() => handleTileChange(opt.id)}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 transition-colors ${
+                        className={`w-full text-left min-h-[44px] px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 transition-colors ${
                           active
                             ? 'bg-[#0B124D] text-white font-bold shadow-sm'
                             : 'hover:bg-slate-100 text-[#0B124D]'
@@ -1323,8 +1788,8 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                         <div className="min-w-0 flex-1">
                           <div className="truncate leading-tight">{isMn ? opt.labelMn : opt.labelEn}</div>
                           <div
-                            className={`text-[10px] truncate ${
-                              active ? 'text-white/75' : 'text-[#72778A]'
+                            className={`text-xs truncate ${
+                              active ? 'text-white/80' : 'text-[#72778A]'
                             }`}
                           >
                             {isMn ? opt.descMn : opt.descEn}
@@ -1338,21 +1803,40 @@ export const RiskMap: React.FC<RiskMapProps> = ({
               )}
             </div>
 
-            <div className="h-5 w-px bg-slate-200/90 shrink-0" />
+            <div className="h-5 w-px bg-slate-200/90 shrink-0 hidden sm:block" />
 
             {/* Thermal Heatmap Toggle */}
             <button
-              onClick={() => setOverlayState('heatmap', !showHeatmap)}
-              className={`h-8 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 ${
-                showHeatmap
+              onClick={() => {
+                if (tileStyle === 'tactical3d') {
+                  showOverlayNotice(
+                    '3D Тактик горимд дулааны давхарга түр унтарч, барилга ба радиус тод харагдана.',
+                    'Heatmap pauses automatically in 3D Tactical so buildings and zone rings stay legible.'
+                  );
+                  return;
+                }
+                setOverlayState('heatmap', !showHeatmap);
+              }}
+              className={`min-h-[44px] px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 ${
+                tileStyle === 'tactical3d'
+                  ? 'bg-slate-100 text-[#72778A] hover:bg-slate-200/80'
+                  : showHeatmap
                   ? 'bg-[#E93B2F] text-white shadow-xs'
                   : 'text-[#0B124D] hover:bg-slate-100'
               }`}
-              title={isMn ? 'Эрсдэлийн дулааны бүсийг харуулах/нуух' : 'Show or hide the thermal risk surface'}
+              title={
+                tileStyle === 'tactical3d'
+                  ? isMn
+                    ? '3D Тактик горимд дулааны бүс түр унтардаг'
+                    : 'Paused in 3D Tactical mode'
+                  : isMn
+                  ? 'Эрсдэлийн дулааны бүсийг харуулах/нуух'
+                  : 'Show or hide the thermal risk surface'
+              }
               aria-label={isMn ? 'Дулааны бүс' : 'Heatmap'}
             >
               <Flame className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-[11px] sm:text-xs hidden md:inline">
+              <span className="text-xs hidden md:inline">
                 {isMn ? 'Дулааны бүс' : 'Heatmap'}
               </span>
             </button>
@@ -1362,28 +1846,29 @@ export const RiskMap: React.FC<RiskMapProps> = ({
               <button
                 onClick={() => {
                   setShowBasemapDropdown(false);
+                  setShowDistrictFilter(false);
                   setShowLayersDropdown(!showLayersDropdown);
                 }}
-                className={`h-8 px-2 sm:px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                className={`min-h-[44px] px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
                   showLayersDropdown ? 'bg-[#0B124D] text-white' : 'text-[#0B124D] hover:bg-slate-100'
                 }`}
                 title={isMn ? 'Давхарга & шүүлтүүр' : 'Layers & filters'}
                 aria-label={isMn ? 'Давхаргууд' : 'Layers'}
               >
                 <Layers className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[11px] sm:text-xs hidden lg:inline">
+                <span className="text-xs hidden lg:inline">
                   {isMn ? 'Давхаргууд' : 'Layers'} ({overlayOrder.length}/2)
                 </span>
-                <ChevronDown className={`w-3 h-3 opacity-70 transition-transform ${showLayersDropdown ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 opacity-70 transition-transform ${showLayersDropdown ? 'rotate-180' : ''}`} />
               </button>
 
               {showLayersDropdown && (
-                <div className="absolute top-full right-0 mt-2.5 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.1] p-2.5 w-64 z-[950] text-xs space-y-1.5 animate-pop-in">
+                <div className="absolute top-full right-0 mt-2.5 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.1] p-2.5 w-72 z-[950] text-xs space-y-1.5 animate-pop-in">
                   <div className="flex items-center justify-between px-2 py-0.5">
-                    <span className="text-[10px] font-mono uppercase text-[#72778A] font-bold">
+                    <span className="text-xs font-mono uppercase text-[#72778A] font-bold">
                       {isMn ? 'Хороодын харагдац:' : 'Khoroo visibility:'}
                     </span>
-                    <span className="text-[10px] font-mono font-bold text-[#FF633C]">
+                    <span className="text-xs font-mono font-bold text-[#FF633C]">
                       {overlayOrder.length}/2 {isMn ? 'идэвхтэй' : 'active'}
                     </span>
                   </div>
@@ -1392,7 +1877,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                       setOverlayState('khoroos', true, 'district_only');
                       setShowLayersDropdown(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl transition-colors ${
+                    className={`w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl transition-colors ${
                       khorooMode === 'district_only' ? 'bg-[#0B124D] text-white font-bold' : 'hover:bg-slate-100 text-[#0B124D]'
                     }`}
                   >
@@ -1403,7 +1888,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                       setOverlayState('khoroos', true, 'all');
                       setShowLayersDropdown(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl transition-colors ${
+                    className={`w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl transition-colors ${
                       khorooMode === 'all' ? 'bg-[#0B124D] text-white font-bold' : 'hover:bg-slate-100 text-[#0B124D]'
                     }`}
                   >
@@ -1416,7 +1901,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                       setOverlayState('khoroos', false);
                       setShowLayersDropdown(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl transition-colors ${
+                    className={`w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl transition-colors ${
                       khorooMode === 'none' ? 'bg-[#0B124D] text-white font-bold' : 'hover:bg-slate-100 text-[#0B124D]'
                     }`}
                   >
@@ -1425,26 +1910,26 @@ export const RiskMap: React.FC<RiskMapProps> = ({
 
                   <div className="border-t border-slate-100 my-1" />
 
-                  <div className="text-[10px] font-mono uppercase text-[#72778A] font-bold px-2 py-0.5">
+                  <div className="text-xs font-mono uppercase text-[#72778A] font-bold px-2 py-0.5">
                     {isMn ? 'Нэмэлт давхаргууд (дээд нь 2):' : 'Optional layers (max 2):'}
                   </div>
                   <button
                     onClick={() => setOverlayState('stations', !showStations)}
-                    className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
+                    className="w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
                   >
                     <span>🚒 {isMn ? 'Гал унтраах ангиуд' : 'Fire stations'}</span>
                     <span className="font-bold text-xs">{showStations ? (isMn ? 'Идэвхтэй' : 'On') : isMn ? 'Хаалттай' : 'Off'}</span>
                   </button>
                   <button
                     onClick={() => setOverlayState('buffers', !showStationBuffers)}
-                    className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
+                    className="w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
                   >
                     <span>⭕ {isMn ? 'Хүрэх тойрог (3 / 5 км)' : 'Coverage (3 / 5 km)'}</span>
                     <span className="font-bold text-xs">{showStationBuffers ? (isMn ? 'Тийм' : 'Yes') : isMn ? 'Үгүй' : 'No'}</span>
                   </button>
                   <button
                     onClick={() => setOverlayState('incidents', !showIncidents)}
-                    className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
+                    className="w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
                   >
                     <span>
                       📍 {isMn ? 'Жишээ дуудлага' : 'Sample calls'} · {DEMO_HISTORICAL_INCIDENTS.length} /{' '}
@@ -1454,9 +1939,9 @@ export const RiskMap: React.FC<RiskMapProps> = ({
                   </button>
                   <button
                     onClick={() => setOverlayState('heatmap', !showHeatmap)}
-                    className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
+                    className="w-full text-left min-h-[40px] px-3 py-1.5 rounded-xl hover:bg-slate-100 text-[#0B124D] flex items-center justify-between"
                   >
-                    <span>🔥 {isMn ? 'Дулааны эрсдэлт бүс' : 'Thermal risk surface'}</span>
+                    <span>🔥 {isMn ? 'Загварчилсан дулаан' : 'Modelled heat'}</span>
                     <span className="font-bold text-xs">{showHeatmap ? (isMn ? 'Тийм' : 'Yes') : isMn ? 'Үгүй' : 'No'}</span>
                   </button>
                 </div>
@@ -1466,7 +1951,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
 
           {/* Inline Weather & UB Average Risk Ticker */}
           <div
-            className="hidden xl:flex items-center gap-1.5 ml-auto bg-white/95 px-2.5 h-10 rounded-2xl border border-black/[0.08] shadow-md text-[10.5px] font-mono shrink-0"
+            className="hidden xl:flex items-center gap-1.5 ml-auto bg-white/95 px-3 min-h-[44px] rounded-2xl border border-black/[0.08] shadow-md text-xs font-mono shrink-0"
             title={
               live.isLive
                 ? `${live.provider} · ${live.lastUpdated}`
@@ -1505,203 +1990,50 @@ export const RiskMap: React.FC<RiskMapProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Unified District Strip (flanking scroll arrows prevent clipping any district score) */}
-        <div className="relative z-20 w-full pointer-events-auto bg-white/95 rounded-2xl border border-black/[0.08] shadow-md p-1 flex items-center gap-1">
-          <button
-            onClick={handleResetToAllUB}
-            className={`h-7 px-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 flex items-center gap-1.5 ${
-              !activeDistrict
-                ? 'bg-[#0B124D] text-white font-bold shadow-xs'
-                : 'text-[#0B124D] hover:bg-slate-100'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5 shrink-0" />
-            <span>{isMn ? 'Бүх УБ' : 'All UB'}</span>
-          </button>
-
-          <button
-            onClick={() => setSortBy(sortBy === 'risk_desc' ? 'default' : 'risk_desc')}
-            className={`h-7 px-2 rounded-xl text-[11px] font-mono font-bold whitespace-nowrap transition-all shrink-0 flex items-center gap-1 ${
-              sortBy === 'risk_desc'
-                ? 'bg-amber-500/15 text-amber-800 border border-amber-500/30'
-                : 'text-[#72778A] hover:bg-slate-100 hover:text-[#0B124D]'
-            }`}
-            title={isMn ? 'Дүүргүүдийг эрэмбэлэх' : 'Sort districts'}
-          >
-            <ArrowUpDown className="w-3 h-3 shrink-0" />
-            <span className="hidden sm:inline">
-              {sortBy === 'risk_desc'
-                ? isMn
-                  ? 'Эрсдэлээр'
-                  : 'Top Risk'
-                : isMn
-                ? 'Бүсээр'
-                : 'Default'}
-            </span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 shrink-0 mx-0.5" />
-
-          {canScrollLeft && (
-            <button
-              onClick={() => handleScroll('left')}
-              className="w-6 h-7 rounded-lg hover:bg-slate-100 text-[#0B124D] flex items-center justify-center shrink-0 transition-colors active:scale-95"
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          )}
-
-          <div
-            ref={carouselRef}
-            onScroll={updateScrollStatus}
-            className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0 scroll-smooth select-none"
-          >
-            {displayedDistricts.map((d) => {
-              const isSel = activeDistrict?.id === d.id && !selectedKhoroo;
-              const isVeryHigh = d.riskScore >= 75;
-              const isHigh = d.riskScore >= 55 && d.riskScore < 75;
-
-              return (
-                <button
-                  key={d.id}
-                  onClick={() => {
-                    setActiveDistrict(d);
-                    setSelectedKhoroo(null);
-                    setIsPanelOpen(true);
-                    if (onSelectDistrict && d.id !== selectedDistrictId) {
-                      onSelectDistrict(d.id);
-                    } else if (mapInstanceRef.current) {
-                      if (tileStyle === 'tactical3d') {
-                        const topKhoroo = UB_KHOROOS.filter((k) => k.districtId === d.id).sort(
-                          (a, b) => b.riskScore - a.riskScore
-                        )[0];
-                        focusMap(mapInstanceRef.current, topKhoroo?.center ?? d.center, 15);
-                      } else {
-                        focusMap(mapInstanceRef.current, d.center, 12);
-                      }
-                    }
-                  }}
-                  className={`h-7 px-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 flex items-center gap-1.5 ${
-                    isSel
-                      ? 'bg-[#0B124D] text-white font-bold shadow-xs'
-                      : 'text-[#0B124D] hover:bg-slate-100'
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      isVeryHigh ? 'bg-[#E93B2F]' : isHigh ? 'bg-[#FF633C]' : 'bg-[#12B89A]'
-                    }`}
-                  />
-                  <span>{isMn ? d.nameMn : d.nameEn}</span>
-                  <span
-                    className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-md leading-none ${
-                      isSel
-                        ? 'bg-white/20 text-white'
-                        : isVeryHigh
-                        ? 'bg-red-50 text-[#E93B2F]'
-                        : isHigh
-                        ? 'bg-orange-50 text-[#FF633C]'
-                        : 'bg-emerald-50 text-emerald-700 dark:text-emerald-300'
-                    }`}
-                  >
-                    {d.riskScore}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {canScrollRight && (
-            <button
-              onClick={() => handleScroll('right')}
-              className="w-6 h-7 rounded-lg hover:bg-slate-100 text-[#0B124D] flex items-center justify-center shrink-0 transition-colors active:scale-95"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Row 3: Compact Integrated Khoroo Sub-Strip */}
-        {activeDistrict && activeDistrictKhoroos.length > 0 && (
-          <div className="relative z-10 inline-flex max-w-full items-center gap-1 bg-white/95 rounded-xl border border-black/[0.08] shadow-sm px-2 py-1 overflow-x-auto scrollbar-none pointer-events-auto select-none text-[11px]">
-            <span className="text-[10.5px] font-mono font-bold text-[#72778A] pr-2 mr-0.5 border-r border-slate-200 shrink-0">
-              {isMn
-                ? `${activeDistrict.nameMn} · ${activeDistrict.khoroosCount} хороо`
-                : `${activeDistrict.nameEn} · ${activeDistrict.khoroosCount} khoroos`}
-            </span>
-            {activeDistrictKhoroos.slice(0, 8).map((kh) => {
-              const isSelKh = selectedKhoroo?.id === kh.id;
-              return (
-                <button
-                  key={kh.id}
-                  onClick={() => {
-                    setSelectedKhoroo(kh);
-                    setIsPanelOpen(true);
-                    if (mapInstanceRef.current) focusMap(mapInstanceRef.current, kh.center, tileStyle === 'tactical3d' ? 15 : 14);
-                  }}
-                  className={`px-2 py-0.5 rounded-lg whitespace-nowrap transition-all shrink-0 font-medium flex items-center gap-1 ${
-                    isSelKh
-                      ? 'bg-[#FF633C] text-white font-bold shadow-xs'
-                      : 'hover:bg-slate-100 text-[#0B124D]'
-                  }`}
-                >
-                  <span>{khorooLabel(kh.khorooNumber, isMn)}</span>
-                  <span className={`font-mono font-bold text-[10px] ${isSelKh ? 'text-white/90' : 'text-[#72778A]'}`}>
-                    {kh.riskScore}
-                  </span>
-                </button>
-              );
-            })}
-            {activeDistrictKhoroos.length > 8 && (
-              <button
-                onClick={() => setIsPanelOpen(true)}
-                className="px-2 py-0.5 rounded-lg hover:bg-slate-100 text-[#0B124D] text-[10px] font-mono font-semibold shrink-0"
-              >
-                {isMn ? `+${activeDistrictKhoroos.length - 8} хороо →` : `+${activeDistrictKhoroos.length - 8} more →`}
-              </button>
-            )}
-          </div>
-        )}
         {layerLimitNotice && (
           <div
             role="status"
-            className="pointer-events-auto px-3 py-1.5 rounded-xl bg-[#0B124D]/92 text-white text-[11px] font-medium shadow-md"
+            className="pointer-events-auto px-3 py-1.5 rounded-xl bg-[#0B124D]/92 text-white text-xs font-medium shadow-md"
           >
             {layerLimitNotice}
           </div>
         )}
       </div>
 
-      {/* GPS / Locate Me Button — anchored cleanly to the lower-right unobstructed map zone */}
+      {/* GPS / Locate Me Button */}
       <div
-        className={`absolute z-[850] flex flex-col items-end gap-1.5 transition-all duration-300 ${
-          isPanelOpen
-            ? 'bottom-[142px] right-3 lg:bottom-4 lg:right-[416px]'
+        className={`absolute z-[860] flex flex-col items-end gap-1.5 transition-all duration-300 ${
+          tileStyle === 'tactical3d'
+            ? isPanelOpen
+              ? 'top-[146px] right-2.5 sm:top-auto sm:bottom-3 lg:right-[416px]'
+              : 'top-[146px] right-2.5 sm:top-auto sm:bottom-3 sm:right-4'
+            : isPanelOpen
+            ? 'bottom-[170px] right-3 lg:bottom-4 lg:right-[416px]'
             : 'bottom-14 right-3 lg:bottom-4 lg:right-4'
         }`}
       >
         {geoError && (
-          <div className="px-2.5 py-1 rounded-xl bg-[#0B124D]/95 text-white text-[10px] font-mono shadow-lg">
+          <div className="px-2.5 py-1 rounded-xl bg-[#0B124D]/95 text-white text-xs font-mono shadow-lg">
             {geoError}
           </div>
         )}
         <div className="flex items-center gap-2">
-          {/* Mobile compact legend toggle */}
-          <button
-            type="button"
-            onClick={() => setShowMobileLegend(!showMobileLegend)}
-            className="sm:hidden px-2.5 h-9 bg-white/95 text-[#0B124D] rounded-full shadow-lg border border-black/[0.08] text-[11px] font-mono font-bold flex items-center gap-1"
-          >
-            <span>🔥</span>
-            <span>{isMn ? 'Тайлбар' : 'Key'}</span>
-          </button>
+          {/* Mobile compact legend toggle (only outside 3D Tactical) */}
+          {tileStyle !== 'tactical3d' && (
+            <button
+              type="button"
+              onClick={() => setShowMobileLegend(!showMobileLegend)}
+              className="sm:hidden px-3 min-h-[44px] bg-white/95 text-[#0B124D] rounded-full shadow-lg border border-black/[0.08] text-xs font-mono font-bold flex items-center gap-1"
+            >
+              <span>🔥</span>
+              <span>{isMn ? 'Тайлбар' : 'Key'}</span>
+            </button>
+          )}
 
           <button
             onClick={handleAnalyzeCurrentArea}
             disabled={geoLocating}
-            className="w-10 h-10 bg-white/95 hover:bg-white text-[#0B124D] rounded-full shadow-lg border border-black/[0.08] transition-all active:scale-95 flex items-center justify-center"
+            className="w-11 h-11 bg-white/95 hover:bg-white text-[#0B124D] rounded-full shadow-lg border border-black/[0.08] transition-all active:scale-95 flex items-center justify-center"
             title={isMn ? 'Миний байршлыг олох' : 'Find my location'}
             aria-label={isMn ? 'Миний байршлыг олох' : 'Find my location'}
           >
@@ -1720,99 +2052,104 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       </div>
 
       {/*
-        HEATMAP LEGEND HUD
-        Positioned right of Leaflet's bottomleft zoom control (`left-[56px]`) so zero overlap.
-        Shows color meaning, scale (Composite Index 0-100), period (2024-2026 + current meteo),
-        and real-time spatial inspection readout when hovering across the map.
+        CHOROPLETH / HEATMAP LEGEND HUD (hidden in 3D Tactical mode where Tactical3DHud + zone circle explain risk)
       */}
-      <div
-        className={`absolute z-[850] bg-white/95 px-3.5 py-2.5 rounded-2xl border border-black/[0.08] shadow-lg text-[10px] font-mono transition-all ${
-          showMobileLegend
-            ? 'bottom-[214px] left-2 right-2 flex flex-col gap-1.5 sm:bottom-3 sm:left-[56px] sm:right-auto sm:max-w-md'
-            : 'hidden sm:flex flex-col gap-1.5 bottom-3 left-[56px] max-w-md pointer-events-none'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[#0B124D] uppercase tracking-wide">
-              {isMn ? 'Эрсдэлийн дулааны индекс' : 'Composite Risk Surface'}
-            </span>
-            <span
-              className="w-24 h-2 rounded-full border border-black/10 shrink-0"
-              style={{ background: HEAT_LEGEND_GRADIENT }}
-              aria-hidden="true"
-            />
-            <span className="text-[#72778A]">0–100</span>
-          </div>
-          {showMobileLegend && (
-            <button
-              type="button"
-              onClick={() => setShowMobileLegend(false)}
-              className="sm:hidden text-[#72778A] font-bold px-1"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="flex items-center gap-1 font-bold text-[#E93B2F]">
-            <span className="w-2 h-2 rounded-full bg-[#E93B2F]" /> 75–100{' '}
-            {isMn ? 'Маш өндөр' : 'Very high'}
-          </span>
-          <span className="flex items-center gap-1 font-bold text-[#FF633C]">
-            <span className="w-2 h-2 rounded-full bg-[#FF633C]" /> 55–74 {isMn ? 'Өндөр' : 'High'}
-          </span>
-          <span className="flex items-center gap-1 font-bold text-amber-600">
-            <span className="w-2 h-2 rounded-full bg-amber-500" /> 35–54 {isMn ? 'Дунд' : 'Mod'}
-          </span>
-          <span className="flex items-center gap-1 font-bold text-[#12B89A]">
-            <span className="w-2 h-2 rounded-full bg-[#12B89A]" /> &lt;35 {isMn ? 'Бага' : 'Low'}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-black/[0.06] text-[9.5px] text-[#72778A]">
-          <span>
-            {isMn
-              ? `2024–2026 · Хүрээ: ≥56 / ≥68 / ≥78 · Анги: ${UB_FIRE_STATIONS.length}`
-              : `2024–2026 · Isolines: ≥56 / ≥68 / ≥78 · Units: ${UB_FIRE_STATIONS.length}`}
-          </span>
-          <span
-            ref={hoverReadoutRef}
-            style={{ display: 'none' }}
-            className="font-bold text-[#0B124D] truncate max-w-[230px]"
-          />
-        </div>
-      </div>
-
-      {/* 3D Tactical Bottom-Left Zoom + 2D/3D Switcher (un-tilted crisp HUD matching Image 1) */}
-      {tileStyle === 'tactical3d' && (
+      {tileStyle !== 'tactical3d' && (
         <div
-          className={`absolute left-3 z-[860] flex flex-col gap-1.5 ${
-            isPanelOpen ? 'bottom-[142px] sm:bottom-3' : 'bottom-5 sm:bottom-3'
+          className={`absolute z-[850] bg-white/95 px-3.5 py-2.5 rounded-2xl border border-black/[0.08] shadow-lg text-xs font-mono transition-all ${
+            showMobileLegend
+              ? 'bottom-[234px] left-2 right-2 flex flex-col gap-1.5 sm:bottom-3 sm:left-[56px] sm:right-auto sm:max-w-lg'
+              : 'hidden sm:flex flex-col gap-1.5 bottom-3 left-[56px] max-w-lg pointer-events-none'
           }`}
         >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-[#0B124D] uppercase tracking-wide">
+                {showHeatmap
+                  ? isMn
+                    ? 'Загварчилсан дулааны эрсдэл (Modelled)'
+                    : 'Modelled Thermal Risk Surface'
+                  : isMn
+                  ? 'Ангилсан дүүргийн зураглал'
+                  : 'Discrete District Choropleth'}
+              </span>
+              {showHeatmap && (
+                <>
+                  <span
+                    className="w-20 h-2 rounded-full border border-black/10 shrink-0"
+                    style={{ background: HEAT_LEGEND_GRADIENT }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-[#72778A]">0–100</span>
+                </>
+              )}
+            </div>
+            {showMobileLegend && (
+              <button
+                type="button"
+                onClick={() => setShowMobileLegend(false)}
+                className="sm:hidden text-[#72778A] font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+            <span className="flex items-center gap-1 font-bold text-[#E93B2F]">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#E93B2F]" /> 75–100 {isMn ? 'Маш өндөр' : 'Very high'}
+            </span>
+            <span className="flex items-center gap-1 font-bold text-[#FF633C]">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#FF633C]" /> 55–74 {isMn ? 'Өндөр' : 'High'}
+            </span>
+            <span className="flex items-center gap-1 font-bold text-amber-700">
+              <span className="w-2.5 h-2.5 rounded-xs bg-amber-500" /> 35–54 {isMn ? 'Дунд' : 'Mod'}
+            </span>
+            <span className="flex items-center gap-1 font-bold text-[#0F967E]">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#12B89A]" /> &lt;35 {isMn ? 'Бага' : 'Low'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-black/[0.06] text-xs text-[#72778A]">
+            <span>
+              {showHeatmap
+                ? isMn
+                  ? `Modelled / Загварчилсан · Хүрээ: ≥56 / ≥68 / ≥78 · Анги: ${UB_FIRE_STATIONS.length}`
+                  : `Modelled surface · Isolines: ≥56 / ≥68 / ≥78 · Units: ${UB_FIRE_STATIONS.length}`
+                : isMn
+                ? `Нийлбэр индекс (0–100) · Демо/Загварчилсан суурь · Анги: ${UB_FIRE_STATIONS.length}`
+                : `Composite index (0–100) · Demo/modelled baseline · Units: ${UB_FIRE_STATIONS.length}`}
+            </span>
+            <span
+              ref={hoverReadoutRef}
+              style={{ display: 'none' }}
+              className="font-bold text-[#0B124D] truncate max-w-[230px]"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 3D Tactical Zoom + 2D/3D Switcher */}
+      {tileStyle === 'tactical3d' && (
+        <div className="absolute left-2.5 top-[146px] sm:top-auto sm:bottom-3 sm:left-3 z-[865] flex flex-col gap-1.5">
           <button
             type="button"
-            onClick={() => {
-              setIs3DTilt((prev) => !prev);
-              window.setTimeout(() => mapInstanceRef.current?.invalidateSize({ animate: false }), 120);
-            }}
-            className={`w-9 h-8 rounded-lg font-mono text-[11px] font-extrabold border shadow-lg transition-colors flex items-center justify-center ${
-              is3DTilt
+            onClick={() => setIs3DExtruded((prev) => !prev)}
+            className={`w-11 h-11 rounded-lg font-mono text-xs font-extrabold border shadow-lg transition-colors flex items-center justify-center ${
+              is3DExtruded
                 ? 'bg-[#3B82F6] text-white border-blue-400/50'
                 : 'bg-[#0F172A]/95 text-slate-200 border-slate-700 hover:bg-slate-800'
             }`}
-            title={isMn ? '3D налуу / 2D хавтгай шилжүүлэх' : 'Toggle 3D tilt / 2D view'}
+            title={isMn ? '3D аксонометрик / 2D хавтгай шилжүүлэх' : 'Toggle 3D buildings / 2D plan'}
           >
-            {is3DTilt ? '3D' : '2D'}
+            {is3DExtruded ? '3D' : '2D'}
           </button>
           <div className="flex flex-col rounded-xl overflow-hidden border border-slate-700/90 bg-[#0F172A]/95 shadow-lg">
             <button
               type="button"
               onClick={() => mapInstanceRef.current?.zoomIn()}
               aria-label="Zoom in"
-              className="w-9 h-8 text-slate-100 hover:bg-slate-800 font-bold text-base flex items-center justify-center border-b border-slate-700/80 transition-colors"
+              className="w-11 h-11 text-slate-100 hover:bg-slate-800 font-bold text-base flex items-center justify-center border-b border-slate-700/80 transition-colors"
             >
               +
             </button>
@@ -1820,7 +2157,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
               type="button"
               onClick={() => mapInstanceRef.current?.zoomOut()}
               aria-label="Zoom out"
-              className="w-9 h-8 text-slate-100 hover:bg-slate-800 font-bold text-base flex items-center justify-center transition-colors"
+              className="w-11 h-11 text-slate-100 hover:bg-slate-800 font-bold text-base flex items-center justify-center transition-colors"
             >
               −
             </button>
@@ -1828,15 +2165,15 @@ export const RiskMap: React.FC<RiskMapProps> = ({
         </div>
       )}
 
-      {/* 3D Tactical Bottom-Right Scale & Live Coordinates HUD (matching Image 1) */}
+      {/* 3D Tactical Bottom-Right Scale & Coord Pill (stacks cleanly above GPS button) */}
       {tileStyle === 'tactical3d' && (
         <div
-          className={`hidden sm:flex flex-col items-end gap-1.5 absolute z-[850] pointer-events-none transition-all duration-300 ${
-            isPanelOpen ? 'bottom-16 right-[416px]' : 'bottom-16 right-4'
+          className={`hidden sm:flex flex-col items-end gap-1.5 absolute z-[855] pointer-events-none transition-all duration-300 bottom-[64px] ${
+            isPanelOpen ? 'lg:right-[416px] right-4' : 'right-4'
           }`}
         >
-          <div className="bg-[#0A1122]/92 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-lg text-center min-w-[104px]">
-            <div className="text-[11px] font-mono font-bold text-slate-100 tabular-nums leading-tight">
+          <div className="bg-[#0A1122]/92 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-lg text-center min-w-[96px]">
+            <div className="text-xs font-mono font-bold text-slate-100 tabular-nums leading-tight">
               {mapScaleLabel(mapZoom)}
             </div>
             <div className="mt-1 h-[2px] w-full bg-slate-600 relative">
@@ -1845,48 +2182,29 @@ export const RiskMap: React.FC<RiskMapProps> = ({
           </div>
           <div
             ref={coordTextRef}
-            className="bg-[#0A1122]/92 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-lg text-[10.5px] font-mono text-slate-200 tabular-nums whitespace-nowrap"
+            className="bg-[#0A1122]/92 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-lg text-xs font-mono text-slate-200 tabular-nums whitespace-nowrap"
           >
-            Lat: {(initialDist?.center[0] ?? UB_CENTER_COORDS[0]).toFixed(4)}° N, Lon:{' '}
-            {(initialDist?.center[1] ?? UB_CENTER_COORDS[1]).toFixed(4)}° E
+            {(initialDist?.center[0] ?? UB_CENTER_COORDS[0]).toFixed(4)}°N,{' '}
+            {(initialDist?.center[1] ?? UB_CENTER_COORDS[1]).toFixed(4)}°E
           </div>
         </div>
       )}
 
-      {/* Perspective Stage + Overscanned Leaflet Wrapper (static className on mapContainerRef!) */}
+      {/* Crisp Flat Map Stage (zero CSS-tilt blur, zero click coordinate offset!) */}
       <div
         className="w-full h-full relative overflow-hidden"
         style={{
-          perspective: isTilted3D ? '980px' : undefined,
-          perspectiveOrigin: '50% 44%',
           backgroundColor: tileStyle === 'tactical3d' ? '#060A14' : undefined,
         }}
       >
-        {isTilted3D && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#060A14] via-[#060A14]/75 to-transparent z-[400]"
-          />
-        )}
         <div
-          style={
-            isTilted3D
-              ? {
-                  transform: 'rotateX(38deg) scale(1.03)',
-                  transformOrigin: '50% 62%',
-                  willChange: 'transform',
-                }
-              : undefined
-          }
-          className={`absolute ${
-            isTilted3D ? '-inset-x-[16%] -top-[26%] -bottom-[10%]' : 'inset-0'
-          } ${
+          className={`absolute inset-0 ${
             tileStyle === 'tactical3d'
-              ? 'fw-tactical3d-map [&_.leaflet-control-container]:opacity-0 [&_.leaflet-control-container]:pointer-events-none [&_.leaflet-tile-pane]:[will-change:transform]'
+              ? 'fw-tactical3d-map [&_.leaflet-control-container]:opacity-0 [&_.leaflet-control-container]:pointer-events-none'
               : ''
           } ${
             isPanelOpen
-              ? '[&_.leaflet-bottom.leaflet-left]:bottom-[142px]! sm:[&_.leaflet-bottom.leaflet-left]:bottom-0!'
+              ? '[&_.leaflet-bottom.leaflet-left]:bottom-[168px]! sm:[&_.leaflet-bottom.leaflet-left]:bottom-0!'
               : '[&_.leaflet-bottom.leaflet-left]:bottom-5! sm:[&_.leaflet-bottom.leaflet-left]:bottom-0!'
           }`}
         >
@@ -1895,20 +2213,74 @@ export const RiskMap: React.FC<RiskMapProps> = ({
         </div>
       </div>
 
+      {tileStyle === 'tactical3d' && (
+        <Tactical3DHud
+          isMn={isMn}
+          isPanelOpen={isPanelOpen}
+          activeDistrict={activeDistrict}
+          districtKhoroos={
+            activeDistrict
+              ? activeDistrictKhoroos
+              : [...liveKhoroos].sort((a, b) => b.riskScore - a.riskScore).slice(0, 30)
+          }
+          selectedKhoroo={selectedKhoroo}
+          scene={tacticalScene}
+          scenarioStarted={scenarioStarted}
+          assumptions={assumptions}
+          is3DExtruded={is3DExtruded}
+          osmBuildingCount={osmBuildingCount}
+          onSelectKhoroo={(kh) => {
+            const parentDist = UB_DISTRICTS.find((d) => d.id === kh.districtId);
+            if (parentDist && parentDist.id !== activeDistrict?.id) {
+              setActiveDistrict(parentDist);
+              if (onSelectDistrict) onSelectDistrict(parentDist.id);
+            }
+            setSelectedKhoroo(kh);
+            if (mapInstanceRef.current) {
+              focusMap(mapInstanceRef.current, kh.center, 15, 0.42);
+            }
+          }}
+          onToggleScenario={() => {
+            setScenarioStarted((prev) => {
+              const next = !prev;
+              if (next && !selectedKhoroo && activeDistrictKhoroos.length > 0) {
+                setSelectedKhoroo(activeDistrictKhoroos[0]);
+              }
+              return next;
+            });
+          }}
+          onUpdateAssumptions={(next) => setAssumptions(next)}
+          onFocusZone={handleFocusTacticalZone}
+          onFitStationRoute={handleFitTacticalRoute}
+        />
+      )}
+
       <Tactical3DOverlay
         map={mapInstance}
         active={tileStyle === 'tactical3d'}
+        is3DExtruded={is3DExtruded}
+        isPanelOpen={isPanelOpen}
+        scenarioStarted={scenarioStarted}
+        assumptions={assumptions}
         activeDistrict={activeDistrict}
         selectedKhoroo={selectedKhoroo}
-        khoroos={UB_KHOROOS}
+        khoroos={liveKhoroos}
         stations={UB_FIRE_STATIONS}
         isMn={isMn}
+        onSelectKhoroo={(kh) => {
+          setSelectedKhoroo(kh);
+          setIsPanelOpen(true);
+          if (mapInstanceRef.current) {
+            focusMap(mapInstanceRef.current, kh.center, 15, 0.42);
+          }
+        }}
+        onOsmCountChange={setOsmBuildingCount}
       />
 
       <ThermalHeatLayer
         map={mapInstance}
         points={heatPoints}
-        visible={showHeatmap}
+        visible={showHeatmap && tileStyle !== 'tactical3d'}
         darkBasemap={isDarkBasemap}
         onHoverSample={handleHeatHoverSample}
       />
@@ -1917,7 +2289,7 @@ export const RiskMap: React.FC<RiskMapProps> = ({
       {!isPanelOpen && activeDistrict && (
         <button
           onClick={() => setIsPanelOpen(true)}
-          className="absolute bottom-[104px] right-3 sm:bottom-4 sm:right-16 z-[990] bg-[#0B124D] text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full shadow-2xl flex items-center gap-1.5 sm:gap-2 text-xs font-bold hover:bg-[#11166B] transition-all active:scale-95 border border-white/20 max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-88px)] truncate"
+          className="absolute bottom-[104px] right-3 sm:bottom-4 sm:right-16 z-[990] bg-[#0B124D] text-white min-h-[44px] px-4 py-2 rounded-full shadow-2xl flex items-center gap-1.5 sm:gap-2 text-xs font-bold hover:bg-[#11166B] transition-all active:scale-95 border border-white/20 max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-88px)] truncate"
         >
           <span>📋</span>
           <span className="truncate">
@@ -1932,6 +2304,12 @@ export const RiskMap: React.FC<RiskMapProps> = ({
         <AreaAnalysisPanel
           district={activeDistrict}
           selectedKhoroo={selectedKhoroo}
+          threeAxis={
+            selectedKhoroo
+              ? fireState.khorooThreeAxis.get(selectedKhoroo.id)
+              : fireState.districtThreeAxis.get(activeDistrict.id)
+          }
+          districtWeather={live.districts[activeDistrict.id] ?? null}
           onSelectKhoroo={(kh) => setSelectedKhoroo(kh)}
           onClose={() => setIsPanelOpen(false)}
           language={language}

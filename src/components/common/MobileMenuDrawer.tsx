@@ -132,7 +132,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
                   <span className="font-editorial text-lg font-bold text-[#0B124D]">
                     FIREWATCH<span className="text-[#FF633C] font-mono text-xs ml-1">UB</span>
                   </span>
-                  <p className="text-[10px] text-[#72778A] font-mono -mt-0.5">
+                  <p className="text-xs text-[#72778A] font-mono -mt-0.5">
                     {isMn ? 'Бүх цэс & Тохиргоо' : 'Navigation & Settings'}
                   </p>
                 </div>
@@ -140,7 +140,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
 
               <button
                 onClick={onClose}
-                className="w-9 h-9 rounded-full bg-white hover:bg-slate-200 border border-black/[0.08] flex items-center justify-center text-[#72778A] hover:text-[#0B124D] transition-colors"
+                className="w-11 h-11 rounded-full bg-white hover:bg-slate-200 border border-black/[0.08] flex items-center justify-center text-[#5C6275] hover:text-[#0B124D] transition-colors"
                 aria-label={isMn ? 'Хаах' : 'Close menu'}
               >
                 ✕
@@ -213,7 +213,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {/* Mobile Audience Selector */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-mono font-bold tracking-wider text-[#72778A] uppercase px-1 block">
+                <span className="text-xs font-mono font-bold tracking-wider text-[#72778A] uppercase px-1 block">
                   {isMn ? 'ТА ХЭН БЭ?' : 'WHO ARE YOU?'}
                 </span>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -228,7 +228,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
                           onSelectAudience(roleId);
                           onClose();
                         }}
-                        className={`p-2 rounded-xl border text-center text-[11px] font-bold transition-colors ${
+                        className={`p-2 rounded-xl border text-center text-xs font-bold transition-colors ${
                           selected
                             ? 'bg-[#0B124D] text-white border-[#0B124D]'
                             : 'bg-[#F7F8FA] text-[#0B124D] border-black/[0.06]'
@@ -262,7 +262,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
                     <div className="font-bold text-xs">
                       {isMn ? 'Гэр бүлийн хялбар горим' : 'Family & Elder Mode'}
                     </div>
-                    <div className={`text-[10px] ${isFamilyModeOpen ? 'text-white/80' : 'text-amber-800'}`}>
+                    <div className={`text-xs ${isFamilyModeOpen ? 'text-white/80' : 'text-amber-800'}`}>
                       {isMn ? 'Том үсэг, энгийн зөвлөмжүүд' : 'Enlarged text & clear essentials'}
                     </div>
                   </div>
@@ -275,7 +275,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
               {/* Navigation Sections */}
               {sections.map((sec, sIdx) => (
                 <div key={sIdx} className="space-y-1.5">
-                  <span className="text-[10px] font-mono font-bold tracking-wider text-[#72778A] uppercase px-1 block">
+                  <span className="text-xs font-mono font-bold tracking-wider text-[#72778A] uppercase px-1 block">
                     {sec.groupTitle}
                   </span>
                   <div className="space-y-1">
@@ -340,7 +340,7 @@ export const MobileMenuDrawer: React.FC<MobileMenuDrawerProps> = ({
 
             {/* Drawer Footer */}
             <div className="p-3 border-t border-black/[0.06] bg-[#F7F8FA] text-center">
-              <span className="text-[10px] font-mono text-[#72778A]">
+              <span className="text-xs font-mono text-[#72778A]">
                 {isMn ? 'FIREWATCH UB · Нийслэлийн галын эрсдэлийн тандалт' : 'FIREWATCH UB · Citywide fire risk intelligence'}
               </span>
             </div>

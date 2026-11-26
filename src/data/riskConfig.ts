@@ -1,17 +1,12 @@
-import { RiskModelWeights } from '../types';
+import type { RiskLevel, RiskModelWeights } from '../types';
+import { DEFAULT_MODEL_WEIGHTS, clamp, riskLevelFromScore } from '../utils/riskEngine';
 
-export const DEFAULT_RISK_WEIGHTS: RiskModelWeights = {
-  incidentHistoryWeight: 0.30,
-  populationDensityWeight: 0.20,
-  stationProximityWeight: 0.15,
-  gerProportionWeight: 0.15,
-  roadAccessibilityWeight: 0.10,
-  seasonalWeatherWeight: 0.10,
-};
+export const DEFAULT_RISK_WEIGHTS: RiskModelWeights = { ...DEFAULT_MODEL_WEIGHTS };
 
-export interface RiskFormulaExplanation {
-  variableId: keyof RiskModelWeights;
+export interface RiskVariableMetadata {
+  variableId: string;
   code: string;
+  weightPercent: number;
   nameMn: string;
   nameEn: string;
   descriptionMn: string;
@@ -19,96 +14,109 @@ export interface RiskFormulaExplanation {
   dataSourceMn: string;
   dataSourceEn: string;
   normalizationFormula: string;
-  weightPercent: number;
 }
 
-export const RISK_VARIABLES_METADATA: RiskFormulaExplanation[] = [
+export const RISK_VARIABLES_METADATA: RiskVariableMetadata[] = [
   {
-    variableId: 'incidentHistoryWeight',
-    code: 'HIST_INC',
+    variableId: 'incident_density',
+    code: 'V1 · INC',
+    weightPercent: 30,
     nameMn: 'Түүхэн дуудлагын нягтрал',
     nameEn: 'Historical Incident Density',
-    descriptionMn: 'Сүүлийн 3 жилд тухайн бүсэд бүртгэгдсэн гал түймрийн давтамж болон нягтралын нормчилсон утга.',
-    descriptionEn: 'Normalized frequency and spatial density of verified fire incidents reported over the past 3 years.',
-    dataSourceMn: 'Онцгой байдлын нэгдсэн бүртгэл (Жишээ нэгтгэл)',
-    dataSourceEn: 'Consolidated Emergency Log (Demo dataset)',
-    normalizationFormula: 'score = min(100, (incidents / area_km2) / max_density * 100)',
-    weightPercent: 30,
+    descriptionMn:
+      'Тухайн дүүргийн нутаг дэвсгэрийн нэгж талбайд (км²) ногдох галын дуудлагын харьцангуй нягтрал.',
+    descriptionEn:
+      'Relative spatial density of logged fire emergency calls per square kilometer of district territory.',
+    dataSourceMn: 'Демо суурь өгөгдөл + Админ CSV/JSON импорт',
+    dataSourceEn: 'Demo Baseline + Verified Admin CSV/JSON Imports',
+    normalizationFormula: 'clamp((incidents / areaKm2 / 3.8) * 100, 10, 100)',
   },
   {
-    variableId: 'populationDensityWeight',
-    code: 'POP_DENS',
+    variableId: 'population_density',
+    code: 'V2 · POP',
+    weightPercent: 20,
     nameMn: 'Хүн ам ба суурьшлын нягтрал',
     nameEn: 'Population & Settlement Density',
-    descriptionMn: 'Нэг хавтгай дөрвөлжин километр дэх хүн амын тоо болон барилгажилтын ойролцоо нягтрал.',
-    descriptionEn: 'Resident population and building cluster intensity per square kilometer.',
-    dataSourceMn: 'Үндэсний статистикийн хороо (ҮСХ), Нийслэлийн Статистикийн газар',
-    dataSourceEn: 'National Statistics Office of Mongolia',
-    normalizationFormula: 'score = (population / area_km2) / 8000 * 100',
-    weightPercent: 20,
+    descriptionMn:
+      'Оршин суугчдын бөөгнөрөл, барилга хоорондын зай болон цахилгааны ачааллын өртөмтгий байдал.',
+    descriptionEn:
+      'Residential crowding, structural spacing exposure, and peak winter/evening electrical grid load.',
+    dataSourceMn: 'Улаанбаатарын суурь хүн амын лавлагаа (демо)',
+    dataSourceEn: 'UB District Population Reference Baseline (demo)',
+    normalizationFormula: 'clamp((population / areaKm2 / 3200) * 100, 10, 100)',
   },
   {
-    variableId: 'stationProximityWeight',
-    code: 'STA_PROX',
-    nameMn: 'Гал унтраах ангийн хүрэх зай',
-    nameEn: 'Fire Station Proximity Gap',
-    descriptionMn: 'Хамгийн ойрын ОБЕГ-ын Гал түймэр унтраах, аврах анги хүртэлх замын зай болон хүрэх хугацааны саад.',
-    descriptionEn: 'Network distance and estimated route impedance to the nearest operational fire station.',
-    dataSourceMn: 'ОБЕГ-ын салбар байршлын орон зайн координат',
-    dataSourceEn: 'NEMA station spatial coordinates & road network geometry',
-    normalizationFormula: 'score = min(100, (distance_km / 12.0) * 100)',
+    variableId: 'station_proximity',
+    code: 'V3 · STA',
     weightPercent: 15,
+    nameMn: 'Гал унтраах ангийн зай',
+    nameEn: 'Fire Station Proximity',
+    descriptionMn:
+      'Хамгийн ойрын гал унтраах, аврах ангиас тухайн бүсийн төв хүртэлх дундаж зорчих зай.',
+    descriptionEn:
+      'Average straight-line/corridor distance from the nearest NEMA fire & rescue station.',
+    dataSourceMn: '14 ангийн лавлах байршил (статик)',
+    dataSourceEn: '14 Fire Station Reference Coordinates (static)',
+    normalizationFormula: 'clamp((nearestStationDistKm / 8) * 100, 10, 100)',
   },
   {
-    variableId: 'gerProportionWeight',
-    code: 'GER_RATIO',
-    nameMn: 'Гэр хорооллын эзлэх хувь ба халаалтын төрөл',
-    nameEn: 'Ger District Proportion & Heating Type',
-    descriptionMn: 'Төвлөрсөн бус халаалт, зуух, уламжлалт гэр болон амины орон сууцны эзлэх хувийн эрсдэлийн индекс.',
-    descriptionEn: 'Proportion of decentralized solid-fuel stoves, traditional gers, and standalone wood structures.',
-    dataSourceMn: 'Нийслэлийн Засаг даргын тамгын газрын орон сууцны судалгаа',
-    dataSourceEn: 'Ulaanbaatar Municipal Housing & Settlement Survey',
-    normalizationFormula: 'score = ger_household_percent',
+    variableId: 'ger_proportion',
+    code: 'V4 · GER',
     weightPercent: 15,
+    nameMn: 'Гэр хорооллын халаалтын хувь',
+    nameEn: 'Ger & Solid-Fuel Heating Share',
+    descriptionMn:
+      'Хатуу түлш, зуух, яндангийн ашиглалт өндөртэй өрхүүдийн эзлэх хувь болон үнс нурмын эрсдэл.',
+    descriptionEn:
+      'Proportion of households relying on solid-fuel stoves, flue pipes, and outdoor ash storage.',
+    dataSourceMn: 'Гэр / орон сууцны бүтцийн лавлагаа (демо)',
+    dataSourceEn: 'Household Heating Topology Baseline (demo)',
+    normalizationFormula: 'clamp(gerHouseholdPercent, 0, 100)',
   },
   {
-    variableId: 'roadAccessibilityWeight',
-    code: 'ROAD_ACC',
-    nameMn: 'Замын нэвтрэх чадвар ба налуугийн саад',
-    nameEn: 'Road Accessibility & Gradient Constraint',
-    descriptionMn: 'Нарийн гудамж, хашааны зохион байгуулалт, ус шахах машин нэвтрэх боломжгүй мухар замуудын индекс.',
-    descriptionEn: 'Street width sufficiency, dead-end alley frequency, and steep slope terrain impedance for heavy engines.',
-    dataSourceMn: 'OpenStreetMap замын сүлжээ & Газарзүйн өндөржлийн тоон загвар (DEM)',
-    dataSourceEn: 'OpenStreetMap Road Network & Digital Elevation Model',
-    normalizationFormula: 'score = 100 - road_access_score',
+    variableId: 'road_access',
+    code: 'V5 · ROD',
     weightPercent: 10,
+    nameMn: 'Замын нэвтрэх чадвар',
+    nameEn: 'Emergency Road Accessibility',
+    descriptionMn:
+      'Нарийн гудамж, огцом өгсүүр, хашааны зохион байгуулалтаас үүдэх галын машин нэвтрэх саад.',
+    descriptionEn:
+      'Fire apparatus access constraints across steep slopes, narrow ger-district lanes, and dead ends.',
+    dataSourceMn: 'Замын зэрэглэл A–D (суурь үнэлгээ)',
+    dataSourceEn: 'District Road Accessibility Grade A–D (baseline)',
+    normalizationFormula: 'Grade { A: 24, B: 45, C: 68, D: 85 }',
   },
   {
-    variableId: 'seasonalWeatherWeight',
-    code: 'SEAS_WEATH',
-    nameMn: 'Улирлын нөхцөл ба цаг агаарын хүчин зүйл',
-    nameEn: 'Seasonality & Meteorological Factors',
-    descriptionMn: 'Хуурайшилтын түвшин, салхины дундаж хурд, халаалтын улирлын ид үе болон хаврын хуурай өдрүүд.',
-    descriptionEn: 'Relative humidity deficit, sustained wind velocity, and active winter stove heating cycle.',
-    dataSourceMn: 'Цаг уур, орчны шинжилгээний газар (ЦУОШГ)',
-    dataSourceEn: 'National Agency for Meteorology and Environmental Monitoring',
-    normalizationFormula: 'score = (0.5 * wind_factor) + (0.5 * dryness_factor)',
+    variableId: 'seasonal_weather',
+    code: 'V6 · WTH',
     weightPercent: 10,
+    nameMn: 'Улирал ба цаг агаарын нөхцөл',
+    nameEn: 'Seasonal & Live Fire Weather',
+    descriptionMn:
+      'Агаарын чийгшил буурах, хуурай өдрүүд хуримтлагдах, салхины хурд нэмэгдэх цаг агаарын эрч.',
+    descriptionEn:
+      'Relative humidity deficit, dry-day persistence, and wind-driven spread index from Open-Meteo.',
+    dataSourceMn: 'Open-Meteo бодит цагийн 9 дүүргийн өгөгдөл',
+    dataSourceEn: 'Live 9-District Open-Meteo Forecast Telemetry',
+    normalizationFormula: 'clamp(0.65 * baseSeasonal + 0.35 * liveFWI, 5, 100)',
   },
 ];
 
+export interface NormalizedScoreInputs {
+  incidentDensityScore: number;
+  populationDensityScore: number;
+  stationDistanceScore: number;
+  gerHouseholdScore: number;
+  roadConstraintScore: number;
+  weatherFactorScore: number;
+}
+
 export function calculateNormalizedScore(
-  rawValues: {
-    incidentDensityScore: number;
-    populationDensityScore: number;
-    stationDistanceScore: number;
-    gerHouseholdScore: number;
-    roadConstraintScore: number;
-    weatherFactorScore: number;
-  },
+  inputs: NormalizedScoreInputs,
   weights: RiskModelWeights = DEFAULT_RISK_WEIGHTS
-): { score: number; level: 'low' | 'moderate' | 'high' | 'very_high' } {
-  const sumWeights =
+): { score: number; level: RiskLevel } {
+  const totalWeight =
     weights.incidentHistoryWeight +
     weights.populationDensityWeight +
     weights.stationProximityWeight +
@@ -116,22 +124,22 @@ export function calculateNormalizedScore(
     weights.roadAccessibilityWeight +
     weights.seasonalWeatherWeight;
 
-  const normalizedTotal =
-    (rawValues.incidentDensityScore * weights.incidentHistoryWeight +
-      rawValues.populationDensityScore * weights.populationDensityWeight +
-      rawValues.stationDistanceScore * weights.stationProximityWeight +
-      rawValues.gerHouseholdScore * weights.gerProportionWeight +
-      rawValues.roadConstraintScore * weights.roadAccessibilityWeight +
-      rawValues.weatherFactorScore * weights.seasonalWeatherWeight) /
-    (sumWeights || 1);
+  if (totalWeight <= 0) {
+    return { score: 0, level: 'low' };
+  }
 
-  const score = Math.min(100, Math.max(0, Math.round(normalizedTotal)));
+  const weighted =
+    (inputs.incidentDensityScore * weights.incidentHistoryWeight +
+      inputs.populationDensityScore * weights.populationDensityWeight +
+      inputs.stationDistanceScore * weights.stationProximityWeight +
+      inputs.gerHouseholdScore * weights.gerProportionWeight +
+      inputs.roadConstraintScore * weights.roadAccessibilityWeight +
+      inputs.weatherFactorScore * weights.seasonalWeatherWeight) /
+    totalWeight;
 
-  let level: 'low' | 'moderate' | 'high' | 'very_high' = 'low';
-  if (score >= 75) level = 'very_high';
-  else if (score >= 55) level = 'high';
-  else if (score >= 35) level = 'moderate';
-  else level = 'low';
-
-  return { score, level };
+  const score = Math.round(clamp(weighted, 0, 100));
+  return {
+    score,
+    level: riskLevelFromScore(score),
+  };
 }

@@ -22,7 +22,7 @@ export const PolicePlaceholder: React.FC<PolicePlaceholderProps> = ({
     <div className="w-full min-h-[calc(100vh-65px)] bg-[#F7F8FA] p-4 sm:p-8 flex items-center justify-center">
       <div className="max-w-2xl w-full bg-white rounded-3xl border border-black/[0.08] shadow-sm p-6 sm:p-10 space-y-6">
         <div className="space-y-2">
-          <span className="inline-block px-3 py-1 rounded-full bg-[#0B124D]/8 text-[#0B124D] font-mono text-[11px] font-bold uppercase tracking-wider">
+          <span className="inline-block px-3 py-1 rounded-full bg-[#0B124D]/8 text-[#0B124D] font-mono text-xs font-bold uppercase tracking-wider">
             {isMn ? 'ТҮР ХУУДАС · ХЭРЭГЦЭЭ БАТЛАГДААГҮЙ' : 'PLACEHOLDER · REQUIREMENTS UNCONFIRMED'}
           </span>
           <h1 className="font-editorial text-2xl sm:text-3xl font-bold text-[#0B124D]">
@@ -44,19 +44,19 @@ export const PolicePlaceholder: React.FC<PolicePlaceholderProps> = ({
           <div className="flex flex-wrap gap-2.5 pt-1">
             <a
               href={`tel:${EMERGENCY_DISPATCH.police}`}
-              className="px-3.5 py-2 rounded-xl bg-[#0B124D] text-white font-mono font-bold hover:bg-[#11166B] transition-colors"
+              className="px-3.5 py-2.5 rounded-xl bg-[#0B124D] text-white font-mono font-bold hover:bg-[#11166B] transition-colors min-h-[44px] inline-flex items-center"
             >
               🚓 {EMERGENCY_DISPATCH.police} — {isMn ? 'Цагдаа' : 'Police'}
             </a>
             <a
               href={`tel:${EMERGENCY_DISPATCH.rescue}`}
-              className="px-3.5 py-2 rounded-xl bg-[#E93B2F] text-white font-mono font-bold hover:bg-[#c82d22] transition-colors"
+              className="px-3.5 py-2.5 rounded-xl bg-[#E93B2F] text-white font-mono font-bold hover:bg-[#c82d22] transition-colors min-h-[44px] inline-flex items-center"
             >
               🚒 {EMERGENCY_DISPATCH.rescue} — {isMn ? 'Онцгой байдал' : 'Fire & Rescue'}
             </a>
             <a
               href={`tel:${EMERGENCY_DISPATCH.fire}`}
-              className="px-3.5 py-2 rounded-xl bg-white border border-black/15 text-[#0B124D] font-mono font-bold hover:bg-slate-100 transition-colors"
+              className="px-3.5 py-2.5 rounded-xl bg-white border border-black/15 text-[#0B124D] font-mono font-bold hover:bg-slate-100 transition-colors min-h-[44px] inline-flex items-center"
             >
               {EMERGENCY_DISPATCH.fire} — {isMn ? 'Гал команд' : 'Fire Desk'}
             </a>
@@ -74,7 +74,7 @@ export const PolicePlaceholder: React.FC<PolicePlaceholderProps> = ({
           </p>
           <a
             href={feedbackMailto}
-            className="inline-block font-bold underline text-amber-900 hover:text-[#0B124D] pt-1"
+            className="inline-flex items-center font-bold underline text-amber-900 hover:text-[#0B124D] min-h-[44px]"
           >
             {isMn ? 'Хэрэгцээ шаардлага санал болгох (имэйл) →' : 'Share workflow requirements via email →'}
           </a>
@@ -84,14 +84,14 @@ export const PolicePlaceholder: React.FC<PolicePlaceholderProps> = ({
           <button
             type="button"
             onClick={() => onSelectTab('map')}
-            className="px-5 py-2.5 rounded-xl bg-[#0B124D] text-white text-xs font-bold hover:bg-[#11166B] transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-[#0B124D] text-white text-xs font-bold hover:bg-[#11166B] transition-colors min-h-[44px]"
           >
             {isMn ? 'Үндсэн газрын зураг руу очих →' : 'Open Core Risk Map →'}
           </button>
           <button
             type="button"
             onClick={() => onSelectTab('landing')}
-            className="px-5 py-2.5 rounded-xl bg-white border border-black/15 text-[#0B124D] text-xs font-bold hover:bg-slate-50 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-white border border-black/15 text-[#0B124D] text-xs font-bold hover:bg-slate-50 transition-colors min-h-[44px]"
           >
             {isMn ? '← Нүүр хуудас руу буцах' : '← Back to Landing'}
           </button>

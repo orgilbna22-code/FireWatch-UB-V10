@@ -21,10 +21,25 @@ if (typeof window !== 'undefined') {
   }
   ogUrl.setAttribute('content', currentUrl);
 
-  if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
-    });
+  if ('serviceWorker' in navigator) {
+    if (import.meta.env.PROD && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+      });
+    } else if (!import.meta.env.PROD) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => undefined);
+      if ('caches' in window) {
+        caches
+          .keys()
+          .then((keys) =>
+            Promise.all(keys.filter((k) => k.startsWith('firewatch-ub-')).map((k) => caches.delete(k)))
+          )
+          .catch(() => undefined);
+      }
+    }
   }
 }
 

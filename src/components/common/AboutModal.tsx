@@ -46,7 +46,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-[#0B124D]/10 max-h-[90vh] flex flex-col overflow-hidden animate-pop-in">
         <div className="flex items-center justify-between pb-4 border-b border-[#0B124D]/10">
           <div>
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-0.5">
+            <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-0.5">
               FIREWATCH UB · TRUST &amp; GOVERNANCE
             </span>
             <h3 className="font-editorial text-2xl font-bold text-[#0B124D]">
@@ -57,7 +57,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label={isMn ? 'Хаах' : 'Close'}
-            className="w-9 h-9 rounded-full bg-[#F7F8FA] hover:bg-slate-200 text-[#72778A] hover:text-[#0B124D] flex items-center justify-center font-bold"
+            className="w-11 h-11 rounded-full bg-[#F7F8FA] hover:bg-slate-200 text-[#5C6275] hover:text-[#0B124D] flex items-center justify-center font-bold"
           >
             ✕
           </button>
@@ -98,7 +98,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 ? `Хөгжүүлэгч: ${PROJECT_MAINTAINER.leadNameMn} (${PROJECT_MAINTAINER.cityMn}). Улаанбаатарын гэр хороолол болон орон сууцны бүсийн галын эрсдэлийн ойлголтыг нэмэгдүүлэх зорилготой нээлттэй бүтэцтэй төсөл.`
                 : `Maintained by ${PROJECT_MAINTAINER.leadNameEn} (${PROJECT_MAINTAINER.cityEn}). Open civic-tech architecture focused on understandable residential fire risk awareness in Ulaanbaatar.`}
             </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-xs">
               <a
                 href={`mailto:${getMaintainerEmail()}`}
                 className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-[#0B124D] font-bold hover:border-[#FF633C]"

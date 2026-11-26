@@ -11,6 +11,64 @@ interface IncidentHistoryProps {
   onOpenDemoInfo: () => void;
 }
 
+const IncidentTableRow = React.memo<{
+  inc: IncidentRecord;
+  isMn: boolean;
+  isSelected: boolean;
+  categoryText: string;
+  severityText: string;
+  khorooText: string;
+  onSelect: (inc: IncidentRecord) => void;
+}>(({ inc, isMn, isSelected, categoryText, severityText, khorooText, onSelect }) => (
+  <tr
+    tabIndex={0}
+    aria-selected={isSelected}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect(inc);
+      }
+    }}
+    onClick={() => onSelect(inc)}
+    className={`hover:bg-[#F7F8FA] cursor-pointer transition-colors ${
+      isSelected ? 'bg-orange-50/70 font-semibold' : ''
+    }`}
+  >
+    <td className="py-3 px-3 font-mono text-[#0B124D]">{inc.date}</td>
+    <td className="py-3 px-3">
+      <span className="font-bold text-[#0B124D]">
+        {isMn ? inc.districtNameMn : inc.districtNameEn}
+      </span>{' '}
+      <span className="text-[#72778A] text-xs">({khorooText})</span>
+    </td>
+    <td className="py-3 px-3 text-[#72778A]">{categoryText}</td>
+    <td className="py-3 px-3">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span
+          className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+            inc.severity === 'critical'
+              ? 'bg-red-100 text-red-800'
+              : inc.severity === 'moderate'
+              ? 'bg-orange-100 text-orange-800'
+              : 'bg-slate-100 text-slate-700'
+          }`}
+        >
+          {severityText}
+        </span>
+        <span
+          className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded border ${
+            inc.isDemo
+              ? 'bg-amber-50 text-amber-800 border-amber-200'
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          }`}
+        >
+          {inc.isDemo ? 'DEMO' : 'IMPORTED'}
+        </span>
+      </div>
+    </td>
+  </tr>
+));
+
 export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
   language,
   onNavigateToMapWithDistrict,
@@ -23,9 +81,14 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
   const [managedIncidents, setManagedIncidents] = useState<IncidentRecord[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
   const { datasetMode, updateDatasetMode } = useFireCommandSettings();
+  const [visibleCount, setVisibleCount] = useState<number>(25);
   const [activeIncident, setActiveIncident] = useState<IncidentRecord | null>(
     DEMO_HISTORICAL_INCIDENTS[0]
   );
+
+  useEffect(() => {
+    setVisibleCount(25);
+  }, [datasetMode, selectedYear, selectedCategory]);
 
   const loadManaged = useCallback(async () => {
     const result = await safeFetchJson<{
@@ -148,12 +211,12 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#0B124D]/10">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
+              <span className="text-xs font-mono font-bold tracking-widest text-[#C93B17] uppercase">
                 {language === 'mn' ? 'ТҮҮХЭН ДУУДЛАГЫН ТАНДАЛТ' : 'HISTORICAL INCIDENT DATABASE'}
               </span>
               <button
                 onClick={onOpenDemoInfo}
-                className="text-[10px] font-mono bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded"
+                className="text-xs font-mono bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded min-h-[44px] inline-flex items-center"
               >
                 DEMO DATA
               </button>
@@ -180,7 +243,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
             <button
               type="button"
               onClick={() => void loadManaged()}
-              className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+              className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-900 hover:bg-amber-100 min-h-[44px]"
             >
               {isMn ? 'Дахин оролдох' : 'Retry'}
             </button>
@@ -205,7 +268,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
                 type="button"
                 aria-pressed={datasetMode === opt.id}
                 onClick={() => updateDatasetMode(opt.id)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition-colors ${
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-bold transition-colors min-h-[44px] ${
                   datasetMode === opt.id
                     ? 'bg-[#0B124D] text-white'
                     : 'bg-[#F7F8FA] text-[#72778A] hover:text-[#0B124D]'
@@ -225,7 +288,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
               <button
                 key={y}
                 onClick={() => setSelectedYear(y)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors ${
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-bold transition-colors min-h-[44px] ${
                   selectedYear === y
                     ? 'bg-[#0B124D] text-white'
                     : 'bg-[#F7F8FA] text-[#72778A] hover:text-[#0B124D]'
@@ -242,7 +305,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
               <button
                 key={c.id}
                 onClick={() => setSelectedCategory(c.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors min-h-[44px] ${
                   selectedCategory === c.id
                     ? 'bg-[#FF633C] text-white'
                     : 'bg-[#F7F8FA] text-[#72778A] hover:text-[#0B124D]'
@@ -275,61 +338,18 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredIncidents.map((inc) => {
-                    const isSelected = shownIncident?.id === inc.id;
-                    return (
-                      <tr
-                        key={inc.id}
-                        tabIndex={0}
-                        aria-selected={isSelected}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setActiveIncident(inc);
-                          }
-                        }}
-                        onClick={() => setActiveIncident(inc)}
-                        className={`hover:bg-[#F7F8FA] cursor-pointer transition-colors ${
-                          isSelected ? 'bg-orange-50/70 font-semibold' : ''
-                        }`}
-                      >
-                        <td className="py-3 px-3 font-mono text-[#0B124D]">
-                          {inc.date}
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="font-bold text-[#0B124D]">
-                            {language === 'mn' ? inc.districtNameMn : inc.districtNameEn}
-                          </span>{' '}
-                          <span className="text-[#72778A] text-[11px]">({khorooLabel(inc.khoroo)})</span>
-                        </td>
-                        <td className="py-3 px-3 text-[#72778A]">{categoryLabel(inc.category)}</td>
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span
-                              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                                inc.severity === 'critical'
-                                  ? 'bg-red-100 text-[#E93B2F]'
-                                  : inc.severity === 'moderate'
-                                  ? 'bg-orange-100 text-[#FF633C]'
-                                  : 'bg-slate-100 text-[#72778A]'
-                              }`}
-                            >
-                              {severityLabel(inc.severity)}
-                            </span>
-                            <span
-                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-                                inc.isDemo
-                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              }`}
-                            >
-                              {inc.isDemo ? 'DEMO' : 'IMPORTED'}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredIncidents.slice(0, visibleCount).map((inc) => (
+                    <IncidentTableRow
+                      key={inc.id}
+                      inc={inc}
+                      isMn={isMn}
+                      isSelected={shownIncident?.id === inc.id}
+                      categoryText={categoryLabel(inc.category)}
+                      severityText={severityLabel(inc.severity)}
+                      khorooText={khorooLabel(inc.khoroo)}
+                      onSelect={setActiveIncident}
+                    />
+                  ))}
                   {filteredIncidents.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-8 text-center text-[#72778A]">
@@ -342,6 +362,19 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
                 </tbody>
               </table>
             </div>
+            {filteredIncidents.length > visibleCount && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((prev) => prev + 25)}
+                  className="px-4 py-2.5 rounded-xl bg-[#F7F8FA] hover:bg-slate-200/70 border border-black/[0.08] text-xs font-bold text-[#0B124D] transition-colors min-h-[44px]"
+                >
+                  {isMn
+                    ? `Дараагийн 25 бүртгэлийг харах (${filteredIncidents.length - visibleCount} үлдсэн)`
+                    : `Show 25 more records (${filteredIncidents.length - visibleCount} remaining)`}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right Selected Incident Detail Card (5 cols) */}
@@ -361,7 +394,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
 
                 {/* Severity Card */}
                 <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                  <span className="text-[10px] font-mono text-[#72778A] uppercase block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase block mb-1">
                     {language === 'mn' ? 'Урьдчилсан шалтгаан & Шинж чанар' : 'Probable Cause Vector'}
                   </span>
                   <p className="text-sm font-semibold text-[#0B124D]">
@@ -371,7 +404,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                    <span className="text-[10px] text-[#72778A] block">
+                    <span className="text-xs text-[#72778A] block">
                       {language === 'mn' ? 'Координат' : 'Coordinates'}
                     </span>
                     <span className="font-mono font-bold text-[#0B124D]">
@@ -380,10 +413,10 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
                   </div>
 
                   <div className="p-3 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                    <span className="text-[10px] text-[#72778A] block">
+                    <span className="text-xs text-[#72778A] block">
                       {language === 'mn' ? 'Ойролцоо хохирол' : 'Est. Damage (MNT)'}
                     </span>
-                    <span className="font-mono font-bold text-[#FF633C]">
+                    <span className="font-mono font-bold text-[#C93B17]">
                       ₮{shownIncident.estimatedDamageMnt.toLocaleString()}
                     </span>
                   </div>
@@ -392,7 +425,7 @@ export const IncidentHistory: React.FC<IncidentHistoryProps> = ({
                 {onNavigateToMapWithDistrict && (
                   <button
                     onClick={() => onNavigateToMapWithDistrict(shownIncident.districtId)}
-                    className="w-full py-2.5 bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-xl transition-colors text-center"
+                    className="w-full py-3 bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-xl transition-colors text-center min-h-[44px]"
                   >
                     {isMn ? 'Энэ дүүргийг газрын зураг дээр шинжлэх' : 'Inspect area on risk map'} →
                   </button>

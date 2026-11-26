@@ -30,7 +30,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#0B124D]/10">
           <div>
-            <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-1">
+            <span className="text-xs font-mono font-bold tracking-widest text-[#C93B17] uppercase block mb-1">
               {language === 'mn' ? 'АЮУЛГҮЙ БАЙДЛЫН БОЛОВСРОЛЫН ТӨВ' : 'CIVIL SAFETY KNOWLEDGE CENTER'}
             </span>
             <h1 className="font-editorial text-2xl sm:text-3xl md:text-4xl font-bold text-[#0B124D]">
@@ -48,7 +48,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
               onChange={(e) => setSearchFilter(e.target.value)}
               aria-label={language === 'mn' ? 'Аюулгүй байдлын сэдэв хайх' : 'Search safety topics'}
               placeholder={language === 'mn' ? 'Сэдвээр хайх...' : 'Search safety topics...'}
-              className="w-full px-4 py-2 bg-white rounded-xl text-xs border border-[#0B124D]/10 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#FF633C]"
+              className="w-full px-4 py-2.5 bg-white rounded-xl text-xs border border-[#0B124D]/10 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#FF633C] min-h-[44px]"
             />
           </div>
         </div>
@@ -64,7 +64,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
                 <button
                   key={guide.id}
                   onClick={() => setSelectedGuideId(guide.id)}
-                  className={`w-full text-left p-4 rounded-xl transition-all border flex items-center justify-between group ${
+                  className={`w-full text-left p-4 rounded-xl transition-all border flex items-center justify-between group min-h-[44px] ${
                     isSelected
                       ? 'bg-[#0B124D] text-white border-[#0B124D] shadow-md'
                       : 'bg-white text-[#0B124D] border-[#0B124D]/8 hover:border-[#0B124D]/25'
@@ -84,7 +84,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
                   </div>
                   <span
                     className={`text-xs ${
-                      isSelected ? 'text-[#FF633C]' : 'text-slate-300 group-hover:text-[#0B124D]'
+                      isSelected ? 'text-[#FF8C6E]' : 'text-[#5C6275] group-hover:text-[#0B124D]'
                     }`}
                   >
                     →
@@ -103,7 +103,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
                 <span className="w-8 h-8 rounded-full bg-[#FF633C] text-white font-mono text-xs font-bold flex items-center justify-center">
                   {activeGuide.topicNumber}
                 </span>
-                <span className="text-xs font-mono font-bold text-[#FF633C] uppercase">
+                <span className="text-xs font-mono font-bold text-[#C93B17] uppercase">
                   {language === 'mn' ? 'СЭДЭВ' : 'TOPIC'}
                 </span>
               </div>
@@ -128,12 +128,12 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
                     className="p-5 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5 text-xs"
                   >
                     <div className="flex items-center gap-2 font-bold text-sm text-[#0B124D] mb-1.5">
-                      <span className="w-5 h-5 rounded-full bg-[#0B124D] text-white font-mono text-[10px] flex items-center justify-center">
+                      <span className="w-6 h-6 rounded-full bg-[#0B124D] text-white font-mono text-xs flex items-center justify-center shrink-0">
                         {step.step}
                       </span>
                       <span>{language === 'mn' ? step.actionMn : step.actionEn}</span>
                     </div>
-                    <p className="text-[#72778A] leading-relaxed pl-7">
+                    <p className="text-[#72778A] leading-relaxed pl-8">
                       {language === 'mn' ? step.detailsMn : step.detailsEn}
                     </p>
                   </div>
@@ -143,10 +143,10 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
 
             {/* Critical Red Rules */}
             <div className="p-6 rounded-2xl bg-red-50 border border-red-100">
-              <h4 className="font-mono text-xs font-bold text-[#E93B2F] uppercase tracking-wider mb-3">
+              <h4 className="font-mono text-xs font-bold text-red-800 uppercase tracking-wider mb-3">
                 ⚠️ {language === 'mn' ? 'ХАТУУ АНХААРАХ ШААРДЛАГУУД' : 'CRITICAL SAFETY MANDATES'}
               </h4>
-              <ul className="space-y-2 text-xs text-[#E93B2F] leading-relaxed">
+              <ul className="space-y-2 text-xs text-red-800 leading-relaxed">
                 {(language === 'mn' ? activeGuide.criticalRulesMn : activeGuide.criticalRulesEn).map(
                   (rule, i) => (
                     <li key={i} className="flex items-start gap-2">
@@ -159,7 +159,7 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
             </div>
 
             {/* Source Attribution & Emergency Call */}
-            <div className="pt-4 border-t border-[#0B124D]/8 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-[#72778A]">
+            <div className="pt-4 border-t border-[#0B124D]/8 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono text-[#72778A]">
               <span>
                 {language === 'mn' ? 'Зөвлөмжийн лавлагаа (мэдээллийн зорилгоор)' : 'Reference guide (informational)'}:{' '}
                 {language === 'mn' ? activeGuide.officialSourceMn : activeGuide.officialSourceEn}
@@ -167,14 +167,14 @@ export const SafetyCenter: React.FC<SafetyCenterProps> = ({ language }) => {
               <span className="flex items-center gap-2">
                 <a
                   href={`tel:${EMERGENCY_DISPATCH.fire}`}
-                  className="text-[#E93B2F] font-bold hover:underline"
+                  className="text-red-800 font-bold hover:underline inline-flex items-center min-h-[44px] px-1"
                 >
                   {EMERGENCY_DISPATCH.fire}
                 </a>
                 <span>/</span>
                 <a
                   href={`tel:${EMERGENCY_DISPATCH.rescue}`}
-                  className="text-[#E93B2F] font-bold hover:underline"
+                  className="text-red-800 font-bold hover:underline inline-flex items-center min-h-[44px] px-1"
                 >
                   {EMERGENCY_DISPATCH.rescue}
                 </a>

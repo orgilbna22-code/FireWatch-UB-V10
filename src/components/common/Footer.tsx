@@ -23,7 +23,7 @@ export const Footer: React.FC<FooterProps> = ({
   );
 
   return (
-    <footer className="w-full bg-[#0B124D] text-white border-t border-white/10 pt-16 pb-12 px-4 sm:px-6 lg:px-8">
+    <footer className="relative z-10 w-full bg-[#0B124D] text-white border-t border-white/15 pt-16 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-12">
         
         {/* Main Footer Row */}
@@ -121,7 +121,7 @@ export const Footer: React.FC<FooterProps> = ({
                 </a>
               </li>
               <li>
-                <span className="text-white/50 block pt-2 text-[11px]">
+                <span className="text-white/50 block pt-2 text-xs">
                   {language === 'mn' ? 'Онцгой байдлын утас (Монгол):' : 'Emergency dispatch (Mongolia):'}{' '}
                   <a href={`tel:${EMERGENCY_DISPATCH.fire}`} className="text-white font-mono hover:text-[#FF633C] transition-colors">
                     {EMERGENCY_DISPATCH.fire}
@@ -139,13 +139,13 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Disclaimer & Copyright */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-white/60 font-mono">
-          <p className="max-w-2xl leading-relaxed text-[11px]">
+          <p className="max-w-2xl leading-relaxed text-xs">
             ⚠️ {t.footerDisclaimer}{' '}
             {language === 'mn'
               ? 'Энэхүү платформ нь судалгаа, иргэдийн бэлэн байдалд зориулсан демо систем бөгөөд онцгой байдлын албан ёсны зарлан мэдээлэх системийг орлохгүй.'
               : 'Independent research & demo prototype. Estimates rely on public spatial indicators and do NOT replace official emergency dispatch or directives.'}
           </p>
-          <div className="shrink-0 flex flex-col sm:items-end gap-2 text-right text-[11px]">
+          <div className="shrink-0 flex flex-col sm:items-end gap-2 text-right text-xs">
             <PWAInstallButton language={language} />
             <span>© 2026–2027 FIREWATCH UB</span>
           </div>

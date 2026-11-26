@@ -49,7 +49,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
   return (
     <div className="pt-3 border-t border-black/[0.06] space-y-2.5 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-[#5C6275]">
+        <span className="text-xs font-medium text-[#5C6275]">
           {isMn
             ? 'Энэ мэдээлэл ойлгомжтой байсан уу?'
             : 'Was this risk summary helpful and accurate?'}
@@ -63,13 +63,13 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
               setShowReportForm(false);
             }}
             aria-pressed={helpfulAck}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg border text-xs font-semibold transition-colors ${
               helpfulAck
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                 : 'bg-white border-black/10 text-[#0B124D] hover:bg-slate-50'
             }`}
           >
-            <ThumbsUp className="w-3 h-3" aria-hidden="true" />
+            <ThumbsUp className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{helpfulAck ? (isMn ? 'Баярлалаа!' : 'Thank you!') : isMn ? 'Тийм' : 'Helpful'}</span>
           </button>
 
@@ -80,13 +80,13 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
               setHelpfulAck(false);
             }}
             aria-expanded={showReportForm}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg border text-xs font-semibold transition-colors ${
               showReportForm
                 ? 'bg-amber-100 border-amber-300 text-amber-950'
                 : 'bg-white border-black/10 text-[#5C6275] hover:text-[#0B124D] hover:bg-slate-50'
             }`}
           >
-            <Flag className="w-3 h-3" aria-hidden="true" />
+            <Flag className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{isMn ? 'Буруу өгөгдөл мэдээлэх' : 'Report wrong data'}</span>
           </button>
         </div>
@@ -94,7 +94,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
 
       {showReportForm && (
         <div className="p-3 rounded-xl bg-[#F7F8FA] border border-black/[0.08] space-y-2">
-          <p className="text-[11px] text-[#5C6275] leading-snug">
+          <p className="text-xs text-[#5C6275] leading-snug">
             {isMn
               ? 'Хувийн мэдээлэл (утас, нэр) бичих шаардлагагүй. Доорх тайлбарыг хуулж эсвэл имэйлээр илгээнэ үү.'
               : 'Privacy-friendly report: no tracking or server logging. Copy context or send via email.'}
@@ -115,17 +115,17 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={mailtoHref}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B124D] hover:bg-[#11166B] text-white text-[11px] font-bold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold transition-colors"
             >
-              <Mail className="w-3 h-3" aria-hidden="true" />
+              <Mail className="w-3.5 h-3.5" aria-hidden="true" />
               <span>{isMn ? 'Имэйлээр илгээх' : 'Send via Email'}</span>
             </a>
             <button
               type="button"
               onClick={() => void handleCopy()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-black/15 text-[#0B124D] hover:bg-slate-50 text-[11px] font-bold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg bg-white border border-black/15 text-[#0B124D] hover:bg-slate-50 text-xs font-bold transition-colors"
             >
-              {copied ? <Check className="w-3 h-3 text-[#12B89A]" /> : <Copy className="w-3 h-3" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-[#0E7A65]" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? (isMn ? 'Хуулагдлаа' : 'Copied') : isMn ? 'Мэдээлэл хуулах' : 'Copy Details'}</span>
             </button>
           </div>

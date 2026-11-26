@@ -2,19 +2,36 @@ import React, { Suspense, lazy, useCallback, useState, useEffect } from 'react';
 import { ActiveTab, Language, ViewMode } from './types';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
-import { LandingHero } from './components/landing/LandingHero';
-import { LandingSections } from './components/landing/LandingSections';
-import { DataSourcesModal } from './components/common/DataSourcesModal';
-import { AboutModal } from './components/common/AboutModal';
-import { FamilyQuickView } from './components/common/FamilyQuickView';
-import { GlobalFireBackground } from './components/common/GlobalFireBackground';
+import { CitizenHomePage } from './components/citizen/CitizenHomePage';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
-import { MobileMenuDrawer } from './components/common/MobileMenuDrawer';
 import { OfflineIndicator } from './components/common/PWAStatus';
 import { useTheme } from './hooks/useTheme';
 import { liveWeather } from './hooks/liveWeather';
 import { useApiAvailability } from './utils/apiClient';
 import { AudienceRole, readSavedAudience, saveAudience } from './utils/audienceSession';
+import { FIRE_BG_EVENT, readFireBgMode } from './utils/fireBgMode';
+
+const LandingHero = lazy(() =>
+  import('./components/landing/LandingHero').then((m) => ({ default: m.LandingHero }))
+);
+const LandingSections = lazy(() =>
+  import('./components/landing/LandingSections').then((m) => ({ default: m.LandingSections }))
+);
+const DataSourcesModal = lazy(() =>
+  import('./components/common/DataSourcesModal').then((m) => ({ default: m.DataSourcesModal }))
+);
+const AboutModal = lazy(() =>
+  import('./components/common/AboutModal').then((m) => ({ default: m.AboutModal }))
+);
+const FamilyQuickView = lazy(() =>
+  import('./components/common/FamilyQuickView').then((m) => ({ default: m.FamilyQuickView }))
+);
+const MobileMenuDrawer = lazy(() =>
+  import('./components/common/MobileMenuDrawer').then((m) => ({ default: m.MobileMenuDrawer }))
+);
+const GlobalFireBackground = lazy(() =>
+  import('./components/common/GlobalFireBackground').then((m) => ({ default: m.GlobalFireBackground }))
+);
 
 const RiskMap = lazy(() => import('./components/map/RiskMap').then((m) => ({ default: m.RiskMap })));
 const OverviewDashboard = lazy(() =>
@@ -58,13 +75,18 @@ const PolicePlaceholder = lazy(() =>
 );
 
 const VALID_TABS: ActiveTab[] = [
-  'landing', 'overview', 'map', 'explorer', 'districts', 'incidents',
+  'citizen', 'landing', 'overview', 'map', 'explorer', 'districts', 'incidents',
   'calendar', 'emergency', 'weather', 'safety', 'reports', 'sources', 'personal', 'police',
 ];
 
+function parseHashToTab(rawHash: string): ActiveTab | null {
+  const cleaned = rawHash.replace('#', '').trim().toLowerCase();
+  if (cleaned === 'about') return 'landing';
+  return VALID_TABS.includes(cleaned as ActiveTab) ? (cleaned as ActiveTab) : null;
+}
+
 function getInitialTab(): ActiveTab {
-  const h = window.location.hash.replace('#', '') as ActiveTab;
-  return VALID_TABS.includes(h) ? h : 'landing';
+  return parseHashToTab(window.location.hash) ?? 'citizen';
 }
 
 export default function App() {
@@ -80,8 +102,38 @@ export default function App() {
   const [isFamilyModeOpen, setIsFamilyModeOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [demoNoticeDismissed, setDemoNoticeDismissed] = useState(false);
+  const [fireBgReady, setFireBgReady] = useState(false);
+  const [savedBgMode, setSavedBgMode] = useState(() => readFireBgMode('soft'));
   const { theme, toggleTheme } = useTheme();
   const apiHealth = useApiAvailability(language);
+
+  // Defer ambient canvas bundle until browser is idle after first paint
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    const onBgChange = (e: Event) => {
+      const next = (e as CustomEvent).detail;
+      if (next === 'soft' || next === 'vivid' || next === 'off') {
+        setSavedBgMode(next);
+        setFireBgReady(true);
+      }
+    };
+    window.addEventListener(FIRE_BG_EVENT, onBgChange);
+    if (typeof win.requestIdleCallback === 'function') {
+      const id = win.requestIdleCallback(() => setFireBgReady(true), { timeout: 600 });
+      return () => {
+        window.removeEventListener(FIRE_BG_EVENT, onBgChange);
+        win.cancelIdleCallback?.(id);
+      };
+    }
+    const timer = window.setTimeout(() => setFireBgReady(true), 200);
+    return () => {
+      window.removeEventListener(FIRE_BG_EVENT, onBgChange);
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   // Single shared LIVE weather feed (Open-Meteo) for map ticker, dashboard and weather views
   useEffect(() => {
@@ -107,9 +159,9 @@ export default function App() {
 
   useEffect(() => {
     const onHashChange = () => {
-      const h = window.location.hash.replace('#', '') as ActiveTab;
-      if (VALID_TABS.includes(h)) {
-        setActiveTab((cur) => (cur === h ? cur : h));
+      const next = parseHashToTab(window.location.hash);
+      if (next) {
+        setActiveTab((cur) => (cur === next ? cur : next));
       }
     };
     window.addEventListener('hashchange', onHashChange);
@@ -140,7 +192,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F7F8FA] text-[#12152A] antialiased selection:bg-[#FF633C]/20 selection:text-[#0B124D] relative w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-transparent text-[#12152A] antialiased selection:bg-[#FF633C]/20 selection:text-[#0B124D] relative w-full max-w-full overflow-x-clip">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[1500] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-[#0B124D] focus:text-white focus:text-xs focus:font-bold focus:shadow-lg"
@@ -148,8 +200,24 @@ export default function App() {
         {language === 'mn' ? 'Үндсэн хэсэг рүү очих' : 'Skip to main content'}
       </a>
 
-      {/* Omnipresent Living Ambient Fire Atmosphere Across Whole Site */}
-      <GlobalFireBackground initialMode="soft" language={language} hideRibbon={activeTab === 'map'} />
+      {/* Static instant backdrop shell until idle-loaded canvas mounts (zero layout shift or flash) */}
+      {activeTab !== 'map' && savedBgMode !== 'off' && !fireBgReady && (
+        <div
+          className="fixed inset-0 z-0 pointer-events-none"
+          style={{
+            background:
+              savedBgMode === 'vivid'
+                ? 'linear-gradient(175deg, #070B2A 0%, #12123B 38%, #281128 72%, #3D1418 100%)'
+                : 'linear-gradient(175deg, #070B28 0%, #0D1442 44%, #1A1333 76%, #28121E 100%)',
+          }}
+          aria-hidden="true"
+        />
+      )}
+      {fireBgReady && (
+        <Suspense fallback={null}>
+          <GlobalFireBackground initialMode="soft" language={language} hideRibbon={activeTab === 'map'} />
+        </Suspense>
+      )}
 
       {/* Universal Top Navigation Header */}
       <Header
@@ -169,16 +237,18 @@ export default function App() {
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
       />
 
-      {/* Optional Family & Elder Friendly Quick Modal Overlay */}
+      {/* Optional Family & Elder Friendly Quick Modal Overlay (lazy-loaded on demand) */}
       {isFamilyModeOpen && (
-        <FamilyQuickView
-          language={language}
-          onClose={closeFamilyMode}
-          onOpenMap={() => {
-            setIsFamilyModeOpen(false);
-            setActiveTab('map');
-          }}
-        />
+        <Suspense fallback={null}>
+          <FamilyQuickView
+            language={language}
+            onClose={closeFamilyMode}
+            onOpenMap={() => {
+              setIsFamilyModeOpen(false);
+              setActiveTab('map');
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Static-host / backend-offline notice */}
@@ -195,7 +265,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => void apiHealth.recheck()}
-            className="px-2.5 py-0.5 rounded-lg bg-white border border-amber-300 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+            className="min-h-[44px] px-3 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-900 hover:bg-amber-100"
           >
             {language === 'mn' ? 'Дахин шалгах' : 'Retry'}
           </button>
@@ -203,7 +273,7 @@ export default function App() {
             type="button"
             onClick={() => setDemoNoticeDismissed(true)}
             aria-label={language === 'mn' ? 'Хаах' : 'Dismiss'}
-            className="text-amber-800 hover:text-amber-950 font-bold px-1"
+            className="min-h-[44px] min-w-[44px] text-amber-800 hover:text-amber-950 font-bold px-2 flex items-center justify-center"
           >
             ✕
           </button>
@@ -214,7 +284,7 @@ export default function App() {
       <main
         id="main-content"
         tabIndex={-1}
-        className={`flex-1 flex flex-col relative w-full max-w-full overflow-x-hidden focus:outline-none ${activeTab === 'map' ? '' : 'pb-20 lg:pb-0'}`}
+        className={`flex-1 flex flex-col relative z-10 w-full max-w-full overflow-x-clip focus:outline-none ${activeTab === 'map' ? '' : 'pb-20 lg:pb-0'}`}
       >
         <Suspense
           fallback={
@@ -228,6 +298,18 @@ export default function App() {
           }
         >
         <div key={activeTab} className="flex-1 flex flex-col animate-fade-in">
+            {activeTab === 'citizen' && (
+              <CitizenHomePage
+                language={language}
+                onSelectTab={setActiveTab}
+                onExploreMap={(distId) => {
+                  if (distId) setSelectedDistrictId(distId);
+                  setActiveTab('map');
+                }}
+                onOpenDemoInfo={() => setIsDataSourcesModalOpen(true)}
+              />
+            )}
+
             {activeTab === 'landing' && (
               <div className="flex-1 flex flex-col">
                 <LandingHero
@@ -249,13 +331,17 @@ export default function App() {
             )}
 
             {activeTab === 'overview' && (
-              <OverviewDashboard
-                language={language}
-                viewMode={viewMode}
-                onSelectTab={setActiveTab}
-                onSelectDistrict={handleSelectDistrictAndMap}
-                onOpenDemoInfo={() => setIsDataSourcesModalOpen(true)}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <OverviewDashboard
+                    language={language}
+                    viewMode={viewMode}
+                    onSelectTab={setActiveTab}
+                    onSelectDistrict={handleSelectDistrictAndMap}
+                    onOpenDemoInfo={() => setIsDataSourcesModalOpen(true)}
+                  />
+                </div>
+              </div>
             )}
 
             {activeTab === 'map' && (
@@ -269,78 +355,104 @@ export default function App() {
             )}
 
             {activeTab === 'explorer' && (
-              <div className="space-y-8">
-                <RiskExplorer
-                  language={language}
-                  onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
-                />
-                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
-                  <FireSimulationLab
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA] space-y-8">
+                  <RiskExplorer
                     language={language}
-                    onExploreMap={() => setActiveTab('map')}
+                    onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
                   />
+                  <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
+                    <FireSimulationLab
+                      language={language}
+                      onExploreMap={() => setActiveTab('map')}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'districts' && (
-              <DistrictAnalysis
-                language={language}
-                initialDistrictId={selectedDistrictId}
-                onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <DistrictAnalysis
+                    language={language}
+                    initialDistrictId={selectedDistrictId}
+                    onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
+                  />
+                </div>
+              </div>
             )}
 
             {activeTab === 'incidents' && (
-              <IncidentHistory
-                language={language}
-                onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
-                onOpenDemoInfo={() => setIsDataSourcesModalOpen(true)}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <IncidentHistory
+                    language={language}
+                    onNavigateToMapWithDistrict={handleSelectDistrictAndMap}
+                    onOpenDemoInfo={() => setIsDataSourcesModalOpen(true)}
+                  />
+                </div>
+              </div>
             )}
 
             {activeTab === 'emergency' && (
-              <EmergencyCoverage
-                language={language}
-                onNavigateToMap={() => setActiveTab('map')}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <EmergencyCoverage
+                    language={language}
+                    onNavigateToMap={() => setActiveTab('map')}
+                  />
+                </div>
+              </div>
             )}
 
             {activeTab === 'calendar' && (
-              <RiskCalendar language={language} />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <RiskCalendar language={language} />
+                </div>
+              </div>
             )}
 
             {activeTab === 'weather' && (
-              <div className="space-y-8">
-                <WeatherModule language={language} />
-                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
-                  <FireSimulationLab
-                    language={language}
-                    onExploreMap={() => setActiveTab('map')}
-                  />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA] space-y-8">
+                  <WeatherModule language={language} />
+                  <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
+                    <FireSimulationLab
+                      language={language}
+                      onExploreMap={() => setActiveTab('map')}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'safety' && (
-              <div className="space-y-8">
-                <SafetyCenter language={language} />
-                <div className="px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto pb-12">
-                  <FamilyQuickView
-                    language={language}
-                    onOpenMap={() => setActiveTab('map')}
-                  />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA] space-y-8">
+                  <SafetyCenter language={language} />
+                  <div className="px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto pb-12">
+                    <FamilyQuickView
+                      language={language}
+                      onOpenMap={() => setActiveTab('map')}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'reports' && (
-              <ReportCenter language={language} />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <ReportCenter language={language} />
+                </div>
+              </div>
             )}
 
             {activeTab === 'sources' && (
               <div className="p-4 sm:p-8 max-w-5xl mx-auto my-4 sm:my-8 space-y-6">
-                <div className="bg-white/90 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-sm space-y-6">
+                <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xl space-y-6">
                   <span className="text-xs font-mono font-bold text-[#FF633C] uppercase tracking-wider block">
                     GOVERNANCE &amp; DATA MANAGEMENT
                   </span>
@@ -366,18 +478,26 @@ export default function App() {
             )}
 
             {activeTab === 'personal' && (
-              <PersonalPortal
-                language={language}
-                onExploreMap={() => setActiveTab('map')}
-                onSelectDistrict={handleSelectDistrictAndMap}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <PersonalPortal
+                    language={language}
+                    onExploreMap={() => setActiveTab('map')}
+                    onSelectDistrict={handleSelectDistrictAndMap}
+                  />
+                </div>
+              </div>
             )}
 
             {activeTab === 'police' && (
-              <PolicePlaceholder
-                language={language}
-                onSelectTab={setActiveTab}
-              />
+              <div className="max-w-[1440px] mx-auto w-full px-2 sm:px-6 py-3 sm:py-5">
+                <div className="rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] border border-black/10 dark:border-white/10 bg-[#F7F8FA]">
+                  <PolicePlaceholder
+                    language={language}
+                    onSelectTab={setActiveTab}
+                  />
+                </div>
+              </div>
             )}
         </div>
         </Suspense>
@@ -403,38 +523,50 @@ export default function App() {
         isMenuOpen={isMobileMenuOpen}
       />
 
-      {/* Mobile Slide-Over Menu Drawer */}
-      <MobileMenuDrawer
-        isOpen={isMobileMenuOpen}
-        onClose={closeMobileMenu}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        language={language}
-        setLanguage={setLanguage}
-        audience={audience}
-        onSelectAudience={handleSelectAudience}
-        onOpenSources={() => setIsDataSourcesModalOpen(true)}
-        onOpenAbout={() => setIsAboutModalOpen(true)}
-        onToggleFamilyMode={() => setIsFamilyModeOpen(!isFamilyModeOpen)}
-        isFamilyModeOpen={isFamilyModeOpen}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      {/* Mobile Slide-Over Menu Drawer (mounted lazily when opened) */}
+      {isMobileMenuOpen && (
+        <Suspense fallback={null}>
+          <MobileMenuDrawer
+            isOpen={isMobileMenuOpen}
+            onClose={closeMobileMenu}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            language={language}
+            setLanguage={setLanguage}
+            audience={audience}
+            onSelectAudience={handleSelectAudience}
+            onOpenSources={() => setIsDataSourcesModalOpen(true)}
+            onOpenAbout={() => setIsAboutModalOpen(true)}
+            onToggleFamilyMode={() => setIsFamilyModeOpen(!isFamilyModeOpen)}
+            isFamilyModeOpen={isFamilyModeOpen}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        </Suspense>
+      )}
 
-      {/* Data Governance & Demo Transparency Modal */}
-      <DataSourcesModal
-        isOpen={isDataSourcesModalOpen}
-        onClose={closeSourcesModal}
-        language={language}
-      />
+      {/* Data Governance & Demo Transparency Modal (lazy-loaded on open) */}
+      {isDataSourcesModalOpen && (
+        <Suspense fallback={null}>
+          <DataSourcesModal
+            isOpen={isDataSourcesModalOpen}
+            onClose={closeSourcesModal}
+            language={language}
+          />
+        </Suspense>
+      )}
 
-      {/* About, Privacy & Safety Disclaimers Modal */}
-      <AboutModal
-        isOpen={isAboutModalOpen}
-        onClose={closeAboutModal}
-        language={language}
-        onOpenSources={() => setIsDataSourcesModalOpen(true)}
-      />
+      {/* About, Privacy & Safety Disclaimers Modal (lazy-loaded on open) */}
+      {isAboutModalOpen && (
+        <Suspense fallback={null}>
+          <AboutModal
+            isOpen={isAboutModalOpen}
+            onClose={closeAboutModal}
+            language={language}
+            onOpenSources={() => setIsDataSourcesModalOpen(true)}
+          />
+        </Suspense>
+      )}
 
       <OfflineIndicator language={language} />
 

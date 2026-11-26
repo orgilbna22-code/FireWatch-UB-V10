@@ -36,7 +36,7 @@ export const EmergencyCoverage: React.FC<EmergencyCoverageProps> = ({
           {onNavigateToMap && (
             <button
               onClick={onNavigateToMap}
-              className="w-full sm:w-auto px-4 py-2.5 bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-xl transition-colors whitespace-nowrap shadow-xs text-center"
+              className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-bold rounded-xl transition-colors whitespace-nowrap shadow-xs text-center"
             >
               {language === 'mn' ? 'Газрын зураг дээр харах' : 'View on GIS Map'} →
             </button>
@@ -84,10 +84,10 @@ export const EmergencyCoverage: React.FC<EmergencyCoverageProps> = ({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-mono font-bold text-[#FF633C] uppercase">
+                    <span className="text-xs font-mono font-bold text-[#FF633C] uppercase">
                       {stationCodeLabel(sta.code, language === 'mn')}
                     </span>
-                    <span className="text-[11px] font-mono text-[#72778A]">
+                    <span className="text-xs font-mono text-[#72778A]">
                       {(language === 'mn' ? 'Радиус:' : 'Radius:')} ~{sta.coverageRadiusKm} {unitKm(language === 'mn')}
                     </span>
                   </div>
@@ -120,37 +120,37 @@ export const EmergencyCoverage: React.FC<EmergencyCoverageProps> = ({
             {/* Tactical Resource Metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                <span className="text-[10px] text-[#72778A] block mb-1">
+                <span className="text-xs text-[#72778A] block mb-1">
                   {language === 'mn' ? 'Гал унтраах техник' : 'Apparatus & Trucks'}
                 </span>
                 <span className="font-mono text-2xl font-bold text-[#0B124D]">
                   {selectedStation.vehiclesCount}
                 </span>
-                <span className="text-[10px] text-[#72778A] block mt-1">
+                <span className="text-xs text-[#72778A] block mt-1">
                   {language === 'mn' ? 'Тусгай зориулалтын автомашин' : 'Specialized engines'}
                 </span>
               </div>
 
               <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                <span className="text-[10px] text-[#72778A] block mb-1">
+                <span className="text-xs text-[#72778A] block mb-1">
                   {language === 'mn' ? 'Байнгын бие бүрэлдэхүүн' : 'Active Duty Crew'}
                 </span>
                 <span className="font-mono text-2xl font-bold text-[#0B124D]">
                   {selectedStation.personnelActive}
                 </span>
-                <span className="text-[10px] text-[#72778A] block mt-1">
+                <span className="text-xs text-[#72778A] block mt-1">
                   {language === 'mn' ? 'Ээлжийн аврагчид' : 'Shift personnel'}
                 </span>
               </div>
 
               <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5 col-span-2 sm:col-span-1">
-                <span className="text-[10px] text-[#72778A] block mb-1">
+                <span className="text-xs text-[#72778A] block mb-1">
                   {language === 'mn' ? 'Үйлчлэх бүсийн радиус' : 'Nominal Buffer Radius'}
                 </span>
                 <span className="font-mono text-2xl font-bold text-[#FF633C]">
                   {selectedStation.coverageRadiusKm} {unitKm(language === 'mn')}
                 </span>
-                <span className="text-[10px] text-[#72778A] block mt-1">
+                <span className="text-xs text-[#72778A] block mt-1">
                   {language === 'mn' ? 'Орон зайн шууд хүрэх зай' : 'Primary buffer'}
                 </span>
               </div>

@@ -17,6 +17,7 @@ import {
   getEffectivePilotPartner,
   useFireCommandSettings,
 } from '../../utils/fireCommandSettings';
+import { getUbDateIso } from '../../utils/ubTime';
 
 interface ReportCenterProps {
   language: Language;
@@ -43,7 +44,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
   const live = useLiveWeather();
   const [selectedDistrictId, setSelectedDistrictId] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
-  const [reportDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [reportDate] = useState<string>(() => getUbDateIso());
   const [importedIncidents, setImportedIncidents] = useState<IncidentRecord[]>([]);
   const { datasetMode, pilotPartner } = useFireCommandSettings();
 
@@ -228,7 +229,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
         {/* Screen-Only Header & Controls */}
         <div className="print:hidden flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#0B124D]/10">
           <div>
-            <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-1">
+            <span className="text-xs font-mono font-bold tracking-widest text-[#C93B17] uppercase block mb-1">
               {language === 'mn' ? 'ТАЙЛАНГИЙН ТӨВ' : 'REPORT & INTELLIGENCE CENTER'}
             </span>
             <h1 className="font-editorial text-2xl sm:text-3xl font-bold text-[#0B124D]">
@@ -239,13 +240,13 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={handleDownloadDistrictCSV}
-              className="px-4 py-2.5 bg-white text-[#0B124D] hover:bg-slate-50 border border-[#0B124D]/10 text-xs font-mono font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-white text-[#0B124D] hover:bg-slate-50 border border-[#0B124D]/10 text-xs font-mono font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 min-h-[44px]"
             >
               <span>📥 CSV {isMn ? 'Дүүргийн индекс' : 'District index'}</span>
             </button>
             <button
               onClick={handlePrint}
-              className="px-4 py-2.5 bg-[#FF633C] hover:bg-[#e05430] text-white text-xs font-bold rounded-xl shadow-md shadow-[#FF633C]/20 transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-[#FF633C] hover:bg-[#e05430] text-white text-xs font-bold rounded-xl shadow-md shadow-[#FF633C]/20 transition-all flex items-center gap-1.5 min-h-[44px]"
             >
               <span>🖨️ PDF / {language === 'mn' ? 'Хэвлэх' : 'Print'}</span>
             </button>
@@ -259,7 +260,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
             <select
               value={selectedDistrictId}
               onChange={(e) => setSelectedDistrictId(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-[#0B124D]/10 bg-[#F7F8FA] font-medium"
+              className="px-3 py-2 rounded-lg border border-[#0B124D]/10 bg-[#F7F8FA] font-medium min-h-[44px]"
             >
               <option value="all">
                 {isMn ? `Бүх ${UB_DISTRICTS.length} дүүрэг (Нэгдсэн)` : `All ${UB_DISTRICTS.length} districts (Consolidated)`}
@@ -277,7 +278,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-[#0B124D]/10 bg-[#F7F8FA] font-medium"
+              className="px-3 py-2 rounded-lg border border-[#0B124D]/10 bg-[#F7F8FA] font-medium min-h-[44px]"
               aria-label={isMn ? 'Дуудлагын хугацаа сонгох' : 'Filter the call log by year'}
             >
               <option value="all">{isMn ? 'Бүх бүртгэл' : 'All years'}</option>
@@ -312,7 +313,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
             </div>
 
             <div className="text-right text-xs font-mono text-[#72778A]">
-              <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] mb-1">
+              <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs mb-1">
                 {language === 'mn' ? '⚠ ЖИШЭЭ БА ЗАГВАРЧИЛСАН ӨГӨГДӨЛ' : '⚠ DEMO / MODELLED BASELINE'}
               </span>
               <span className="block font-bold text-[#0B124D]">
@@ -331,18 +332,18 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
           {/* Unavoidable Print/PDF Warning Banner */}
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <strong className="font-mono uppercase text-[11px] block">
+              <strong className="font-mono uppercase text-xs block">
                 {isMn
                   ? 'АНХААР: ЗАГВАРЧИЛСАН БА ЖИШЭЭ МЭДЭЭЛЭЛ (DEMO / MODELLED)'
                   : 'NOTICE: CONTAINS DEMO & MODELLED DATA — NOT AN OFFICIAL DISPATCH RECORD'}
               </strong>
-              <span className="text-[11px] leading-relaxed">
+              <span className="text-xs leading-relaxed">
                 {isMn
                   ? 'Дүүргийн суурь индекс болон 172 хорооны үнэлгээ нь математик загварчлал тул албан ёсны ОБЕГ-ын шуурхай мэдээллийг орлохгүй.'
                   : 'District baselines and 172 modelled khoroo indices are analytical estimates and do not represent live official NEMA dispatch logs.'}
               </span>
             </div>
-            <span className="font-mono text-[10px] font-bold px-2 py-1 rounded bg-white border border-amber-300 shrink-0">
+            <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-white border border-amber-300 shrink-0">
               {datasetMode === 'imported'
                 ? isMn
                   ? `ИМПОРТ (${importedIncidents.length})`
@@ -355,7 +356,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
 
           {/* Scope & Executive Summary */}
           <div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FF633C] block mb-1">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#C93B17] block mb-1">
               01 · {language === 'mn' ? 'ТАЙЛАНГИЙН ХАМРАХ ХҮРЭЭ' : 'EXECUTIVE SCOPE'}
             </span>
             <h2 className="font-editorial text-2xl font-bold text-[#0B124D] mb-3">
@@ -375,15 +376,15 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
           {/* Data Scoreboard */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 rounded-2xl bg-[#F7F8FA] border border-[#0B124D]/8">
             <div>
-              <span className="text-[10px] font-mono text-[#72778A] block">
+              <span className="text-xs font-mono text-[#72778A] block">
                 {language === 'mn' ? 'Эрсдэлийн индекс' : 'Risk Indicator'}
               </span>
-              <span className="font-mono text-3xl font-bold text-[#FF633C]">
+              <span className="font-mono text-3xl font-bold text-[#C93B17]">
                 {targetDistrict ? targetDistrict.riskScore : CITY_AVERAGE_RISK} / 100
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-mono text-[#72778A] block">
+              <span className="text-xs font-mono text-[#72778A] block">
                 {language === 'mn' ? 'Шинжилсэн дуудлага' : 'Records Analyzed'}
               </span>
               <span className="font-mono text-3xl font-bold text-[#0B124D]">
@@ -393,7 +394,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-mono text-[#72778A] block">
+              <span className="text-xs font-mono text-[#72778A] block">
                 {language === 'mn' ? 'Гэр өрхийн хувь' : 'Ger Settlement %'}
               </span>
               <span className="font-mono text-3xl font-bold text-[#0B124D]">
@@ -401,7 +402,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-mono text-[#72778A] block">
+              <span className="text-xs font-mono text-[#72778A] block">
                 {language === 'mn' ? 'Гал унтраах анги' : 'Fire Stations'}
               </span>
               <span className="font-mono text-3xl font-bold text-[#0B124D]">
@@ -480,7 +481,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
               <button
                 onClick={handleDownloadIncidentCSV}
                 disabled={scopedIncidents.length === 0}
-                className="text-[11px] font-mono font-bold text-[#0B124D] hover:text-[#FF633C] disabled:text-slate-300 disabled:cursor-not-allowed print:hidden"
+                className="px-3 py-2 rounded-lg text-xs font-mono font-bold text-[#0B124D] hover:text-[#C93B17] hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed print:hidden min-h-[44px]"
               >
                 📥 CSV ({scopedIncidents.length})
               </button>
@@ -531,7 +532,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
               </div>
             )}
 
-            <p className="text-[10px] text-[#72778A] mt-2">
+            <p className="text-xs text-[#72778A] mt-2">
               {isMn
                 ? 'Эдгээр бичлэг нь загварчлалыг тайлбарлах дүрслэлийн зорилготой; албан ёсны мэдээллийн нөөц биш.'
                 : 'These rows are illustrative records used to explain the model; they are not an official data source.'}
@@ -539,7 +540,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
           </div>
 
           {/* Methodology & Limitations Footer (Section 44 & 45 compliant) */}
-          <div className="pt-6 border-t border-[#0B124D]/10 text-[11px] text-[#72778A] space-y-2">
+          <div className="pt-6 border-t border-[#0B124D]/10 text-xs text-[#72778A] space-y-2">
             <span className="font-bold text-[#0B124D] block uppercase font-mono">
               {language === 'mn' ? 'АРГА ЗҮЙ & ХЯЗГААРЛАЛТ' : 'METHODOLOGY & STATUTORY DISCLAIMER'}
             </span>
@@ -548,7 +549,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ language }) => {
                 ? 'Энэхүү тайлан нь боломжит нээлттэй өгөгдөл болон аналитик загварчлалд суурилсан судалгааны үзүүлэлт юм. Албан ёсны онцгой байдлын автомат сэрэмжлүүлгийн систем биш бөгөөд дуудлагын тактикийн хүрэх хугацааг шууд тодорхойлох баримт бичиг болохгүй.'
                 : 'This intelligence report is compiled from public spatial indicators and mathematical sensitivity formulas. It is an analytical reference platform and does NOT serve as an official emergency warning or tactical guarantee.'}
             </p>
-            <div className="flex items-center justify-between pt-4 font-mono text-[10px]">
+            <div className="flex items-center justify-between pt-4 font-mono text-xs">
               <span>FireWatch UB · {isMn ? 'Иргэний мэдээллийн хөтөч' : 'Civic risk-intelligence prototype'}</span>
               <span>
                 {live.status === 'live'

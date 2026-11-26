@@ -89,9 +89,11 @@ test('SQLite manages incidents CRUD, batch upsert, stats, and AI cache clearing'
     lat: 47.9401,
     lng: 107.011,
     source: 'manual',
+    dataOrigin: 'real',
     createdAtIso: '2026-11-16T01:00:00.000Z',
   });
   assert.equal(inc.id, 'inc-test-1');
+  assert.equal(inc.dataOrigin, 'real');
 
   const synced = db.batchUpsertIncidents([
     {
@@ -107,6 +109,7 @@ test('SQLite manages incidents CRUD, batch upsert, stats, and AI cache clearing'
       lat: 47.9445,
       lng: 106.789,
       source: 'geojson-sync',
+      dataOrigin: 'demo',
       createdAtIso: '2026-11-16T01:05:00.000Z',
     },
     {
@@ -126,17 +129,21 @@ test('SQLite manages incidents CRUD, batch upsert, stats, and AI cache clearing'
     },
   ]);
   assert.equal(synced, 2);
-  assert.equal(db.listIncidents().length, 3);
+  const allRows = db.listIncidents();
+  assert.equal(allRows.length, 3);
+  assert.equal(db.getIncidentById('inc-batch-2')?.dataOrigin, 'demo');
 
   db.setAiCache('mn:bayanzurkh:74:2026-11-16', { summary: 'cached' });
   const statsBefore = db.getStats();
   assert.equal(statsBefore.incidentCount, 3);
+  assert.equal(statsBefore.realIncidentCount, 1);
   assert.equal(statsBefore.aiCacheCount, 1);
 
   assert.equal(db.clearAiCache(), 1);
   assert.equal(db.deleteIncident('inc-batch-1'), true);
   assert.equal(db.deleteIncident('missing-id'), false);
   assert.equal(db.getStats().incidentCount, 2);
+  assert.equal(db.getStats().realIncidentCount, 1);
   assert.equal(db.getStats().aiCacheCount, 0);
 
   db.close();

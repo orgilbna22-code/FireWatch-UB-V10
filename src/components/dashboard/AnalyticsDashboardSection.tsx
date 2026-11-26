@@ -13,11 +13,10 @@ import { ActiveTab, Language } from '../../types';
 import {
   DEMO_HISTORICAL_INCIDENTS,
   TOTAL_CITY_POPULATION,
-  UB_DISTRICTS,
-  UB_FIRE_STATIONS,
-  UB_KHOROOS,
 } from '../../data/ubGeoData';
 import { useLiveWeather } from '../../hooks/liveWeather';
+import { useFireRiskState } from '../../hooks/useFireRiskState';
+import { getUbDateIso } from '../../utils/ubTime';
 
 interface AnalyticsDashboardSectionProps {
   language: Language;
@@ -32,29 +31,26 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
 }) => {
   const isMn = language === 'mn';
   const live = useLiveWeather();
+  const { districts: liveDistricts, khoroos: liveKhoroos } = useFireRiskState();
   const [rankingMode, setRankingMode] = useState<'risk' | 'readiness'>('risk');
   const [hoveredTier, setHoveredTier] = useState<string | null>(null);
 
   const infraBars = useMemo(() => {
-    const stationsCoveragePct = Math.min(
-      96,
-      Math.round(
-        (UB_DISTRICTS.filter((d) => d.nearestStationDistKm <= 4.5).length / UB_DISTRICTS.length) * 100
-      )
+    const stationsCoveragePct = Math.round(
+      (liveDistricts.filter((d) => d.nearestStationDistKm <= 4.5).length / Math.max(1, liveDistricts.length)) * 100
     );
     const centralHeatingPct = Math.round(
-      UB_DISTRICTS.reduce((sum, d) => sum + (100 - d.gerHouseholdPercent) * d.population, 0) /
+      liveDistricts.reduce((sum, d) => sum + (100 - d.gerHouseholdPercent) * d.population, 0) /
         TOTAL_CITY_POPULATION
     );
-    const totalHydrants = UB_KHOROOS.reduce((s, k) => s + k.fireHydrantCount, 0);
-    const hydrantReadinessPct = Math.min(95, Math.round((totalHydrants / (UB_KHOROOS.length * 10)) * 100));
+    const totalHydrants = liveKhoroos.reduce((s, k) => s + k.fireHydrantCount, 0);
+    const hydrantReadinessPct = Math.min(95, Math.round((totalHydrants / Math.max(1, liveKhoroos.length * 10)) * 100));
     const gradeScore = (g: string) => (g === 'A' ? 92 : g === 'B' ? 76 : g === 'C' ? 58 : 38);
     const roadAccessPct = Math.round(
-      UB_DISTRICTS.reduce((s, d) => s + gradeScore(d.roadAccessibilityGrade), 0) / UB_DISTRICTS.length
+      liveDistricts.reduce((s, d) => s + gradeScore(d.roadAccessibilityGrade), 0) / Math.max(1, liveDistricts.length)
     );
-    const responseReadinessPct = Math.min(
-      94,
-      Math.round((UB_FIRE_STATIONS.length / 16) * 100 * 0.7 + (100 - live.fireWeatherIndex) * 0.3)
+    const responseReadinessPct = Math.round(
+      stationsCoveragePct * 0.6 + (100 - live.fireWeatherIndex) * 0.4
     );
 
     return [
@@ -104,24 +100,24 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
         Icon: ShieldCheck,
       },
     ];
-  }, [live.fireWeatherIndex]);
+  }, [live.fireWeatherIndex, liveDistricts, liveKhoroos]);
 
   const rankedDistricts = useMemo(() => {
-    return [...UB_DISTRICTS]
+    return [...liveDistricts]
       .map((d) => ({
         district: d,
         metric: rankingMode === 'risk' ? d.riskScore : Math.max(12, 100 - d.riskScore),
       }))
       .sort((a, b) => b.metric - a.metric)
       .slice(0, 5);
-  }, [rankingMode]);
+  }, [liveDistricts, rankingMode]);
 
   const distribution = useMemo(() => {
-    const total = UB_KHOROOS.length || 1;
-    const highCount = UB_KHOROOS.filter((k) => k.riskScore >= 75).length;
-    const medCount = UB_KHOROOS.filter((k) => k.riskScore >= 55 && k.riskScore < 75).length;
-    const lowCount = UB_KHOROOS.filter((k) => k.riskScore >= 35 && k.riskScore < 55).length;
-    const veryLowCount = UB_KHOROOS.filter((k) => k.riskScore < 35).length;
+    const total = liveKhoroos.length || 1;
+    const highCount = liveKhoroos.filter((k) => k.riskScore >= 75).length;
+    const medCount = liveKhoroos.filter((k) => k.riskScore >= 55 && k.riskScore < 75).length;
+    const lowCount = liveKhoroos.filter((k) => k.riskScore >= 35 && k.riskScore < 55).length;
+    const veryLowCount = liveKhoroos.filter((k) => k.riskScore < 35).length;
 
     const slices = [
       {
@@ -171,11 +167,11 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
       offset += len;
       return item;
     });
-  }, []);
+  }, [liveKhoroos]);
 
   const recentAlerts = useMemo(() => {
     const districtNameMap = new Map<string, { mn: string; en: string }>(
-      UB_DISTRICTS.map((d) => [d.id, { mn: d.nameMn, en: d.nameEn }])
+      liveDistricts.map((d) => [d.id, { mn: d.nameMn, en: d.nameEn }])
     );
     const items = DEMO_HISTORICAL_INCIDENTS.slice(0, 3).map((inc) => {
       const dist = districtNameMap.get(inc.districtId);
@@ -201,31 +197,31 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
       titleEn: `Wind Alert · ${live.windSpeedKmh} km/h`,
       subMn: 'Нийслэлийн хэмжээнд',
       subEn: 'Ulaanbaatar Basin',
-      date: live.lastUpdated.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      date: live.lastUpdated.slice(0, 10) || getUbDateIso(),
       iconBg: 'bg-cyan-600',
       Icon: Wind,
     });
 
     return items.slice(0, 4);
-  }, [live.fireWeatherIndex, live.lastUpdated, live.windSpeedKmh]);
+  }, [live.fireWeatherIndex, live.lastUpdated, live.windSpeedKmh, liveDistricts]);
 
   return (
     <section aria-label="Analytics Dashboard" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="text-[11px] font-mono font-bold tracking-widest text-[#FF633C] uppercase block">
+          <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block">
             ANALYTICS DASHBOARD
           </span>
           <h2 className="font-editorial text-xl sm:text-2xl font-bold text-[#0B124D]">
             {isMn ? 'Орон зайн аналитик хянах самбар' : 'Spatial Risk & Infrastructure Analytics'}
           </h2>
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-[#0B124D]/10 text-[11px] font-semibold">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-[#0B124D]/10 text-xs font-semibold">
           <button
             type="button"
             onClick={() => setRankingMode('risk')}
-            className={`px-2.5 py-1 rounded-lg transition-colors ${
-              rankingMode === 'risk' ? 'bg-[#0B124D] text-white' : 'text-[#72778A] hover:text-[#0B124D]'
+            className={`px-3 py-1.5 min-h-[44px] rounded-lg transition-colors ${
+              rankingMode === 'risk' ? 'bg-[#0B124D] text-white' : 'text-[#5C6275] hover:text-[#0B124D]'
             }`}
           >
             {isMn ? 'Эрсдэлийн зэрэг' : 'Risk Index'}
@@ -233,8 +229,8 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
           <button
             type="button"
             onClick={() => setRankingMode('readiness')}
-            className={`px-2.5 py-1 rounded-lg transition-colors ${
-              rankingMode === 'readiness' ? 'bg-[#12B89A] text-white' : 'text-[#72778A] hover:text-[#0B124D]'
+            className={`px-3 py-1.5 min-h-[44px] rounded-lg transition-colors ${
+              rankingMode === 'readiness' ? 'bg-[#12B89A] text-[#0B124D] font-bold' : 'text-[#5C6275] hover:text-[#0B124D]'
             }`}
           >
             {isMn ? 'Бэлэн байдал' : 'Readiness'}
@@ -250,7 +246,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
             <h3 className="text-sm font-bold text-white leading-tight">
               {isMn ? 'Дэд бүтцийн төлөв' : 'Infrastructure Status'}
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-300">
               {isMn ? 'Ангиллаар (9 дүүрэг, 14 анги)' : 'By category'}
             </p>
           </div>
@@ -269,7 +265,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                     style={{ width: `${pct}%`, backgroundColor: barColor }}
                   />
                 </div>
-                <span className="font-mono text-[11px] font-bold text-slate-200 tabular-nums w-9 text-right shrink-0">
+                <span className="font-mono text-xs font-bold text-slate-200 tabular-nums w-10 text-right shrink-0">
                   {pct}%
                 </span>
               </div>
@@ -289,7 +285,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                 ? 'Шилдэг бэлэн байдалтай дүүрэг'
                 : 'Top Regions by Readiness'}
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-300">
               {isMn ? 'Нийлмэл орон зайн үнэлгээ' : 'Composite spatial score'}
             </p>
           </div>
@@ -311,9 +307,9 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                     onSelectDistrict(district.id);
                     onSelectTab('map');
                   }}
-                  className="w-full flex items-center gap-2.5 text-xs text-left group hover:bg-white/[0.03] rounded-lg px-1 py-0.5 -mx-1 transition-colors"
+                  className="w-full flex items-center gap-2.5 text-xs text-left group hover:bg-white/[0.03] rounded-lg px-1 py-1.5 min-h-[44px] -mx-1 transition-colors"
                 >
-                  <span className="font-mono text-[11px] text-slate-500 w-3 shrink-0 tabular-nums">
+                  <span className="font-mono text-xs text-slate-300 w-4 shrink-0 tabular-nums">
                     {idx + 1}
                   </span>
                   <span className="text-slate-200 group-hover:text-white truncate w-28 shrink-0 font-medium">
@@ -325,7 +321,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                       style={{ width: `${metric}%`, backgroundColor: barColor }}
                     />
                   </div>
-                  <span className="font-mono text-[11px] font-bold text-slate-200 tabular-nums w-9 text-right shrink-0">
+                  <span className="font-mono text-xs font-bold text-slate-200 tabular-nums w-10 text-right shrink-0">
                     {metric.toFixed(1)}
                   </span>
                 </button>
@@ -340,8 +336,8 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
             <h3 className="text-sm font-bold text-white leading-tight">
               {isMn ? 'Эрсдэлийн тархалт' : 'Risk Distribution'}
             </h3>
-            <p className="text-[11px] text-slate-400">
-              {isMn ? `Нутаг дэвсгэрээр (${UB_KHOROOS.length} хороо)` : `By territory (${UB_KHOROOS.length} khoroos)`}
+            <p className="text-xs text-slate-300">
+              {isMn ? `Нутаг дэвсгэрээр (${liveKhoroos.length} хороо)` : `By territory (${liveKhoroos.length} khoroos)`}
             </p>
           </div>
           <div className="flex items-center justify-between gap-4 pt-1">
@@ -369,15 +365,15 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                 <span className="font-mono text-sm font-bold text-white tabular-nums">
                   {hoveredTier
                     ? `${distribution.find((d) => d.id === hoveredTier)?.count ?? 0}`
-                    : UB_KHOROOS.length}
+                    : liveKhoroos.length}
                 </span>
-                <span className="text-[9px] text-slate-400">
+                <span className="text-xs text-slate-300">
                   {isMn ? 'хороо' : 'khoroos'}
                 </span>
               </div>
             </div>
 
-            <div className="flex-1 space-y-2 text-[11px]">
+            <div className="flex-1 space-y-2 text-xs">
               {distribution.map((slice) => (
                 <div
                   key={slice.id}
@@ -387,7 +383,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                     hoveredTier === slice.id ? 'bg-white/[0.06]' : ''
                   }`}
                 >
-                  <span className="flex items-center gap-1.5 text-slate-300 truncate">
+                  <span className="flex items-center gap-1.5 text-slate-200 truncate">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: slice.color }} />
                     <span className="truncate">{isMn ? slice.labelMn : slice.labelEn}</span>
                   </span>
@@ -406,11 +402,11 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
             <h3 className="text-sm font-bold text-white leading-tight">
               {isMn ? 'Сүүлийн сэрэмжлүүлэг' : 'Recent Alerts'}
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-300">
               {isMn ? 'Орон зайн сүүлийн бүртгэл' : 'Latest spatial alerts'}
             </p>
           </div>
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {recentAlerts.map(({ id, districtId, titleMn, titleEn, subMn, subEn, date, iconBg, Icon }) => (
               <button
                 key={id}
@@ -419,7 +415,7 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                   onSelectDistrict(districtId);
                   onSelectTab('map');
                 }}
-                className="w-full flex items-center justify-between gap-2.5 text-left hover:bg-white/[0.04] p-1 -mx-1 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between gap-2.5 text-left hover:bg-white/[0.04] p-1.5 min-h-[44px] -mx-1.5 rounded-xl transition-colors"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0 ${iconBg}`}>
@@ -429,12 +425,12 @@ export const AnalyticsDashboardSection: React.FC<AnalyticsDashboardSectionProps>
                     <div className="text-xs font-semibold text-white truncate">
                       {isMn ? titleMn : titleEn}
                     </div>
-                    <div className="text-[10.5px] text-slate-400 truncate">
+                    <div className="text-xs text-slate-300 truncate">
                       {isMn ? subMn : subEn}
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 tabular-nums shrink-0">
+                <span className="text-xs font-mono text-slate-300 tabular-nums shrink-0">
                   {date}
                 </span>
               </button>

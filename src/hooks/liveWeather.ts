@@ -8,10 +8,16 @@
  * baselines are LIVE.
  */
 import { useSyncExternalStore } from 'react';
+import { UB_DISTRICT_SEEDS } from '../data/districtCenters';
 import { CURRENT_UB_WEATHER } from '../data/ubGeoData';
-import type { RiskLevel, WeatherData } from '../types';
-import { computeFireWeatherBreakdown, riskLevelFromScore as engineRiskLevel } from '../utils/riskEngine';
+import type { DistrictWeatherSnapshot, RiskLevel, WeatherData } from '../types';
+import {
+  computeFireWeatherBreakdown,
+  computeVpdKpa,
+  riskLevelFromScore as engineRiskLevel,
+} from '../utils/riskEngine';
 import { apiAvailability, buildApiUrl } from '../utils/apiClient';
+import { getUbDateIso } from '../utils/ubTime';
 
 export interface LiveDailySlice {
   date: string;
@@ -40,6 +46,8 @@ export interface LiveWeather extends WeatherData {
   ignitionReceptivity: number;
   spreadPotential: number;
   daily: LiveDailySlice[];
+  districts: Record<string, DistrictWeatherSnapshot>;
+  coverageCount: number;
   fetchedAtMs: number | null;
 }
 
@@ -142,6 +150,8 @@ const INITIAL_WEATHER: LiveWeather = {
   ignitionReceptivity: initialBreakdown.ignitionReceptivity,
   spreadPotential: initialBreakdown.spreadPotential,
   daily: [],
+  districts: {},
+  coverageCount: 0,
   fetchedAtMs: null,
 };
 
@@ -166,7 +176,22 @@ interface ServerWeatherResponse {
   ignitionReceptivity?: number;
   spreadPotential?: number;
   daily?: LiveDailySlice[];
+  districts?: Record<string, DistrictWeatherSnapshot>;
+  coverageCount?: number;
   errorReason?: string;
+}
+
+interface DirectOpenMeteoBlock {
+  current?: Record<string, number | string>;
+  daily?: {
+    time?: string[];
+    temperature_2m_max?: number[];
+    temperature_2m_min?: number[];
+    precipitation_sum?: number[];
+    wind_speed_10m_max?: number[];
+    relative_humidity_2m_max?: number[];
+  };
+  utc_offset_seconds?: number;
 }
 
 class LiveWeatherEngine {
@@ -264,6 +289,8 @@ class LiveWeatherEngine {
           isLive: false,
           stale: true,
           provider: payload.provider || 'Open-Meteo',
+          districts: {},
+          coverageCount: 0,
           errorReason: payload.errorReason || 'Weather service temporarily unreachable',
           lastUpdated: '—',
         });
@@ -280,6 +307,7 @@ class LiveWeatherEngine {
       const tzHours = Math.round((payload.utcOffsetSeconds ?? 28800) / 3600);
       const observedAtIso = payload.observedAtIso || '';
       const windDeg = Number(payload.windDirectionDeg ?? 0);
+      const districts = payload.districts && typeof payload.districts === 'object' ? payload.districts : {};
 
       this.patch({
         tempCelsius: round1(payload.tempCelsius),
@@ -300,6 +328,8 @@ class LiveWeatherEngine {
         ignitionReceptivity: Number(payload.ignitionReceptivity ?? 50),
         spreadPotential: Number(payload.spreadPotential ?? 30),
         daily: Array.isArray(payload.daily) ? payload.daily : [],
+        districts,
+        coverageCount: Object.keys(districts).length,
         observedAtIso,
         lastUpdated: observedAtIso ? formatObserved(observedAtIso, tzHours) : '—',
         fetchedAtMs: payload.fetchedAtMs ?? Date.now(),
@@ -323,54 +353,102 @@ class LiveWeatherEngine {
   }
 
   private async fetchDirectOpenMeteo(signal: AbortSignal): Promise<void> {
+    const lats = UB_DISTRICT_SEEDS.map((d) => d.lat).join(',');
+    const lngs = UB_DISTRICT_SEEDS.map((d) => d.lng).join(',');
+
     const url =
       'https://api.open-meteo.com/v1/forecast' +
-      `?latitude=${UB_COORDS.lat}&longitude=${UB_COORDS.lon}` +
+      `?latitude=${lats}&longitude=${lngs}` +
       '&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m' +
       '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_max' +
       '&past_days=10&forecast_days=7&timezone=Asia%2FUlaanbaatar';
 
     const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as {
-      current?: Record<string, number | string>;
-      daily?: {
-        time?: string[];
-        temperature_2m_max?: number[];
-        temperature_2m_min?: number[];
-        precipitation_sum?: number[];
-        wind_speed_10m_max?: number[];
-        relative_humidity_2m_max?: number[];
+    const jsonRaw = (await res.json()) as DirectOpenMeteoBlock | DirectOpenMeteoBlock[];
+    const blocks = Array.isArray(jsonRaw) ? jsonRaw : [jsonRaw];
+
+    const fetchedAtMs = Date.now();
+    const districts: Record<string, DistrictWeatherSnapshot> = {};
+    let primaryDaily: LiveDailySlice[] = [];
+    let primaryTzHours = 8;
+
+    for (let i = 0; i < UB_DISTRICT_SEEDS.length; i++) {
+      const seed = UB_DISTRICT_SEEDS[i];
+      const block = blocks[i] ?? blocks[0];
+      const c = block?.current;
+      if (!c) continue;
+
+      const tempC = round1(Number(c.temperature_2m));
+      const humidity = Math.round(Number(c.relative_humidity_2m));
+      const windKmh = round1(Number(c.wind_speed_10m));
+      const windDeg = Math.round(Number(c.wind_direction_10m ?? 0));
+      const gust = Math.round(Number(c.wind_gusts_10m || windKmh * 1.4));
+      const apparent = round1(Number(c.apparent_temperature ?? tempC));
+      const precip = round1(Number(c.precipitation ?? 0));
+      const code = Number(c.weather_code ?? 0);
+      if ([tempC, humidity, windKmh].some((v) => Number.isNaN(v))) continue;
+
+      const daily: LiveDailySlice[] = (block.daily?.time ?? []).map((date, j) => ({
+        date,
+        tempMaxC: Number(block.daily?.temperature_2m_max?.[j] ?? 0),
+        tempMinC: Number(block.daily?.temperature_2m_min?.[j] ?? 0),
+        precipitationMm: Number(block.daily?.precipitation_sum?.[j] ?? 0),
+        windMaxKmh: Number(block.daily?.wind_speed_10m_max?.[j] ?? 0),
+        humidityMaxPct: Number(block.daily?.relative_humidity_2m_max?.[j] ?? 60),
+      }));
+
+      const observedAtIso = String(c.time ?? `${getUbDateIso()}T00:00`);
+      const droughtDays = countDroughtDays(daily, observedAtIso.slice(0, 10));
+      const breakdown = computeFireWeatherBreakdown({
+        tempCelsius: tempC,
+        humidityPercent: humidity,
+        windSpeedKmh: windKmh,
+        gustKmh: gust,
+        precipitationMm: precip,
+        droughtDays,
+      });
+
+      districts[seed.id] = {
+        districtId: seed.id,
+        observedAtIso,
+        tempCelsius: tempC,
+        apparentCelsius: apparent,
+        humidityPercent: humidity,
+        windSpeedKmh: windKmh,
+        windDirectionDeg: windDeg,
+        gustKmh: gust,
+        precipitationMm: precip,
+        weatherCode: code,
+        droughtDays,
+        vpdKpa: computeVpdKpa(tempC, humidity),
+        fireWeatherIndex: breakdown.fireWeatherIndex,
+        ignitionReceptivity: breakdown.ignitionReceptivity,
+        spreadPotential: breakdown.spreadPotential,
+        provider: 'Open-Meteo',
+        fetchedAtMs,
+        isLive: true,
       };
-      utc_offset_seconds?: number;
-    };
 
-    const c = json.current;
-    if (!c) throw new Error('Missing current block');
-
-    const tempC = Number(c.temperature_2m);
-    const humidity = Number(c.relative_humidity_2m);
-    const windKmh = Number(c.wind_speed_10m);
-    const windDeg = Number(c.wind_direction_10m);
-    const gust = Number(c.wind_gusts_10m || windKmh * 1.4);
-    const apparent = Number(c.apparent_temperature ?? tempC);
-    const precip = Number(c.precipitation ?? 0);
-    const code = Number(c.weather_code ?? 0);
-    if ([tempC, humidity, windKmh].some((v) => Number.isNaN(v))) {
-      throw new Error('Invalid observation');
+      if (i === 0) {
+        primaryDaily = daily;
+        primaryTzHours = Math.round((block.utc_offset_seconds ?? 28800) / 3600);
+      }
     }
 
-    const daily: LiveDailySlice[] = (json.daily?.time ?? []).map((date, i) => ({
-      date,
-      tempMaxC: Number(json.daily?.temperature_2m_max?.[i] ?? 0),
-      tempMinC: Number(json.daily?.temperature_2m_min?.[i] ?? 0),
-      precipitationMm: Number(json.daily?.precipitation_sum?.[i] ?? 0),
-      windMaxKmh: Number(json.daily?.wind_speed_10m_max?.[i] ?? 0),
-      humidityMaxPct: Number(json.daily?.relative_humidity_2m_max?.[i] ?? 60),
-    }));
+    const list = Object.values(districts);
+    if (list.length === 0) throw new Error('Missing current block');
 
-    const observedAtIso = String(c.time ?? new Date().toISOString());
-    const droughtDays = countDroughtDays(daily, observedAtIso.slice(0, 10));
+    const n = list.length;
+    const tempC = round1(list.reduce((s, d) => s + d.tempCelsius, 0) / n);
+    const apparent = round1(list.reduce((s, d) => s + d.apparentCelsius, 0) / n);
+    const humidity = Math.round(list.reduce((s, d) => s + d.humidityPercent, 0) / n);
+    const windKmh = round1(list.reduce((s, d) => s + d.windSpeedKmh, 0) / n);
+    const gust = Math.round(list.reduce((s, d) => s + d.gustKmh, 0) / n);
+    const precip = round1(list.reduce((s, d) => s + d.precipitationMm, 0) / n);
+    const droughtDays = Math.round(list.reduce((s, d) => s + d.droughtDays, 0) / n);
+    const first = list[0];
+
     const breakdown = computeFireWeatherBreakdown({
       tempCelsius: tempC,
       humidityPercent: humidity,
@@ -380,20 +458,19 @@ class LiveWeatherEngine {
       droughtDays,
     });
 
-    const meta = WEATHER_CODES[code] ?? {
+    const meta = WEATHER_CODES[first.weatherCode] ?? {
       mn: 'Тодорхойгүй',
       en: 'Unknown',
       symbol: '🌡️',
       condition: 'cold' as const,
     };
-    const tzHours = Math.round((json.utc_offset_seconds ?? 28800) / 3600);
 
     this.patch({
-      tempCelsius: round1(tempC),
-      humidityPercent: Math.round(humidity),
-      windSpeedKmh: round1(windKmh),
-      windDirectionDeg: Math.round(windDeg),
-      windDirectionCompass: compassEn(windDeg),
+      tempCelsius: tempC,
+      humidityPercent: humidity,
+      windSpeedKmh: windKmh,
+      windDirectionDeg: first.windDirectionDeg,
+      windDirectionCompass: compassEn(first.windDirectionDeg),
       condition: meta.condition,
       conditionMn: meta.mn,
       conditionEn: meta.en,
@@ -401,20 +478,22 @@ class LiveWeatherEngine {
       ignitionReceptivity: breakdown.ignitionReceptivity,
       spreadPotential: breakdown.spreadPotential,
       droughtDays,
-      lastUpdated: formatObserved(observedAtIso, tzHours),
+      lastUpdated: formatObserved(first.observedAtIso, primaryTzHours),
       status: 'live',
       isLive: true,
       stale: false,
-      provider: 'Open-Meteo',
+      provider: 'Open-Meteo (9-district)',
       errorReason: undefined,
-      observedAtIso,
-      apparentCelsius: round1(apparent),
-      gustKmh: Math.round(gust),
-      precipitationMm: round1(precip),
-      weatherCode: code,
+      observedAtIso: first.observedAtIso,
+      apparentCelsius: apparent,
+      gustKmh: gust,
+      precipitationMm: precip,
+      weatherCode: first.weatherCode,
       symbol: meta.symbol,
-      daily,
-      fetchedAtMs: Date.now(),
+      daily: primaryDaily,
+      districts,
+      coverageCount: list.length,
+      fetchedAtMs,
     });
   }
 }
@@ -434,6 +513,12 @@ export const liveWeather = new LiveWeatherEngine();
 
 export const useLiveWeather = (): LiveWeather =>
   useSyncExternalStore(liveWeather.subscribe, liveWeather.getSnapshot, liveWeather.getSnapshot);
+
+export const useDistrictWeather = (districtId?: string): DistrictWeatherSnapshot | null => {
+  const live = useLiveWeather();
+  if (!districtId) return null;
+  return live.districts[districtId] ?? null;
+};
 
 export const minutesSince = (fetchedAtMs: number | null): number | null =>
   fetchedAtMs ? Math.max(0, Math.round((Date.now() - fetchedAtMs) / 60000)) : null;

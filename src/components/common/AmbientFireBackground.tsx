@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createGlowSprite } from '../../utils/fireCanvas';
+import { shouldReduceMotionOrData } from '../../utils/motionBudget';
 
 interface AmbientFireBackgroundProps {
   className?: string;
@@ -43,9 +44,7 @@ export const AmbientFireBackground: React.FC<AmbientFireBackgroundProps> = ({
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReducedMotion = shouldReduceMotionOrData();
 
     // Pre-render offscreen sprites once (eliminates heavy CSS filter: blur passes)
     const sparkSprites = [

@@ -1,8 +1,13 @@
 import type {
   DistrictData,
+  DistrictWeatherSnapshot,
   FactorContribution,
+  KhorooData,
+  MlModelArtifact,
+  PublicHeatCluster,
   RiskLevel,
   RiskModelWeights,
+  ThreeAxisRiskProfile,
 } from '../types';
 
 export interface SpatialHeatPoint {
@@ -489,28 +494,88 @@ export function interpolateHeatValueAtPoint(
   };
 }
 
+export const EARTH_CIRCUMFERENCE_METERS = 40075016.68557849;
+
+/**
+ * Exact Web Mercator (EPSG:3857) ground resolution in metres per CSS pixel.
+ */
+export function metersPerPixelAtLat(lat: number, zoom: number): number {
+  const safeLat = clamp(lat, -85.05112878, 85.05112878);
+  const cosLat = Math.cos((safeLat * Math.PI) / 180);
+  return (EARTH_CIRCUMFERENCE_METERS * cosLat) / (256 * Math.pow(2, zoom));
+}
+
+/**
+ * Converts a ground radius (metres) to screen pixels without upper viewport clamping
+ * so heat footprints remain geographically locked across all zoom levels.
+ */
+export function radiusMetersToPixels(radiusMeters: number, lat: number, zoom: number): number {
+  const mpp = metersPerPixelAtLat(lat, zoom);
+  if (mpp <= 0) return 3;
+  return Math.max(3, radiusMeters / mpp);
+}
+
+/**
+ * Continuous zoom-dependent fill opacity (replaces step jumps at z12/z14).
+ */
+export function thermalZoomFillFactor(zoom: number, darkBasemap: boolean): number {
+  const base = clamp(0.98 - Math.max(0, zoom - 11) * 0.045, 0.72, 0.98);
+  return +(darkBasemap ? base * 1.08 : base * 0.94).toFixed(4);
+}
+
+export interface ThermalGridScratchBuffers {
+  capacity: number;
+  weightAccum: Float32Array;
+  weightedScoreAccum: Float32Array;
+  maxKernelAccum: Float32Array;
+  scores: Float32Array;
+  coverages: Float32Array;
+}
+
+export function createThermalGridScratch(capacity: number): ThermalGridScratchBuffers {
+  return {
+    capacity,
+    weightAccum: new Float32Array(capacity),
+    weightedScoreAccum: new Float32Array(capacity),
+    maxKernelAccum: new Float32Array(capacity),
+    scores: new Float32Array(capacity),
+    coverages: new Float32Array(capacity),
+  };
+}
+
 /**
  * Generates an absolute-scale (0-100) interpolated scalar + alpha field over a
- * pixel/grid viewport. Zoom-invariant and free of additive overlap artifacts.
+ * pixel/grid viewport. Zoom-invariant, free of additive overlap artifacts, and
+ * allocation-free when supplied with reusable scratch buffers.
  */
 export function computeThermalGridField(
   cols: number,
   rows: number,
   widthPx: number,
   heightPx: number,
-  projectedPoints: { x: number; y: number; radiusPx: number; score: number; weightScale: number }[]
-): { scores: Float32Array; coverages: Float32Array } {
+  projectedPoints: { x: number; y: number; radiusPx: number; score: number; weightScale: number }[],
+  scratch?: ThermalGridScratchBuffers
+): { scores: Float32Array; coverages: Float32Array; scratch: ThermalGridScratchBuffers } {
   const total = cols * rows;
-  const weightAccum = new Float32Array(total);
-  const weightedScoreAccum = new Float32Array(total);
-  const maxKernelAccum = new Float32Array(total);
+  const buf =
+    scratch && scratch.capacity >= total ? scratch : createThermalGridScratch(total);
+
+  const weightAccum = buf.weightAccum;
+  const weightedScoreAccum = buf.weightedScoreAccum;
+  const maxKernelAccum = buf.maxKernelAccum;
+  const scores = buf.scores;
+  const coverages = buf.coverages;
+
+  weightAccum.fill(0, 0, total);
+  weightedScoreAccum.fill(0, 0, total);
+  maxKernelAccum.fill(0, 0, total);
 
   const cellW = widthPx / cols;
   const cellH = heightPx / rows;
 
   for (let i = 0; i < projectedPoints.length; i++) {
     const pt = projectedPoints[i];
-    const r = Math.max(6, pt.radiusPx);
+    const r = Math.max(2.5, pt.radiusPx);
     // Skip points completely outside viewport with margin
     if (
       pt.x + r < 0 ||
@@ -521,6 +586,7 @@ export function computeThermalGridField(
       continue;
     }
 
+    const rSq = r * r;
     const gx0 = Math.max(0, Math.floor((pt.x - r) / cellW));
     const gx1 = Math.min(cols - 1, Math.ceil((pt.x + r) / cellW));
     const gy0 = Math.max(0, Math.floor((pt.y - r) / cellH));
@@ -530,17 +596,17 @@ export function computeThermalGridField(
       const cy = gy * cellH + cellH * 0.5;
       const dy = cy - pt.y;
       const dy2 = dy * dy;
+      const rowOffset = gy * cols;
       for (let gx = gx0; gx <= gx1; gx++) {
         const cx = gx * cellW + cellW * 0.5;
         const dx = cx - pt.x;
         const distSq = dx * dx + dy2;
-        const rSq = r * r;
         if (distSq >= rSq) continue;
 
         const u2 = distSq / rSq;
         const kernel = (1 - u2) * (1 - u2);
         const w = kernel * pt.weightScale;
-        const idx = gy * cols + gx;
+        const idx = rowOffset + gx;
         weightedScoreAccum[idx] += w * pt.score;
         weightAccum[idx] += w;
         if (kernel > maxKernelAccum[idx]) {
@@ -549,9 +615,6 @@ export function computeThermalGridField(
       }
     }
   }
-
-  const scores = new Float32Array(total);
-  const coverages = new Float32Array(total);
 
   for (let i = 0; i < total; i++) {
     const wSum = weightAccum[i];
@@ -566,5 +629,383 @@ export function computeThermalGridField(
     }
   }
 
-  return { scores, coverages };
+  return { scores, coverages, scratch: buf };
+}
+
+/**
+ * Magnus-Tetens saturation vapor pressure deficit (VPD in kPa).
+ * Directly governs fine dead fuel equilibrium moisture content and flammability.
+ */
+export function computeVpdKpa(tempCelsius: number, humidityPercent: number): number {
+  const safeRh = clamp(humidityPercent, 2, 100);
+  const esKpa = 0.61078 * Math.exp((17.27 * tempCelsius) / (tempCelsius + 237.3));
+  const vpd = esKpa * (1 - safeRh / 100);
+  return Math.max(0, Math.round(vpd * 1000) / 1000);
+}
+
+/**
+ * Computes live weather-adjusted Khoroo composite score while keeping
+ * demographic/infrastructure foundation deterministic and bounded [8, 98].
+ */
+export function computeKhorooDynamicRisk(
+  khoroo: KhorooData,
+  districtWeather?: Pick<DistrictWeatherSnapshot, 'fireWeatherIndex' | 'spreadPotential'> | null,
+  verifiedRealIncidentBoost = 0
+): { score: number; level: RiskLevel; weatherComponent: number } {
+  const baseScore = khoroo.riskScore;
+  const fwi = districtWeather?.fireWeatherIndex;
+  if (typeof fwi !== 'number' && verifiedRealIncidentBoost <= 0) {
+    return {
+      score: baseScore,
+      level: riskLevelFromScore(baseScore),
+      weatherComponent: 50,
+    };
+  }
+  const weatherComponent = typeof fwi === 'number' ? clamp(fwi, 5, 100) : 50;
+  const weatherDelta = typeof fwi === 'number' ? (weatherComponent - 52) * 0.16 : 0;
+  const realBoost = clamp(verifiedRealIncidentBoost * 1.4, 0, 12);
+  const score = Math.round(clamp(baseScore + weatherDelta + realBoost, 8, 98));
+  return {
+    score,
+    level: riskLevelFromScore(score),
+    weatherComponent: Math.round(weatherComponent),
+  };
+}
+
+const ACCESS_GRADE_BY_KHOROO: Record<KhorooData['roadAccessibility'], 'A' | 'B' | 'C' | 'D'> = {
+  Сайн: 'A',
+  Дунд: 'B',
+  Муу: 'C',
+  'Маш муу': 'D',
+};
+
+const ACCESS_SCORE_BY_GRADE: Record<'A' | 'B' | 'C' | 'D', number> = {
+  A: 90,
+  B: 72,
+  C: 50,
+  D: 28,
+};
+
+/**
+ * Separates (1) Calibrated Ignition Probability % (locked unless validated ML passes all gates),
+ * (2) Spread Hazard Index (0-100), and (3) Suppression / Response Capability.
+ */
+export function computeDistrictThreeAxisRisk(params: {
+  district: DistrictData;
+  weather?: DistrictWeatherSnapshot | null;
+  mlModel?: MlModelArtifact | null;
+  verifiedRealCount?: number;
+}): ThreeAxisRiskProfile {
+  const { district, weather, mlModel, verifiedRealCount = 0 } = params;
+  const hasWeather = Boolean(weather);
+  const fwi = weather?.fireWeatherIndex ?? 50;
+  const spreadPotential = weather?.spreadPotential ?? 45;
+
+  const spreadIndex = Math.round(
+    clamp(
+      0.56 * district.gerHouseholdPercent +
+        0.28 * spreadPotential +
+        0.16 * clamp(fwi, 0, 100),
+      6,
+      98
+    )
+  );
+
+  const driver: ThreeAxisRiskProfile['spreadHazard']['dominantDriver'] = weather
+    ? weather.precipitationMm >= 2 || weather.humidityPercent >= 75
+      ? 'moisture'
+      : weather.spreadPotential - weather.ignitionReceptivity >= 14
+      ? 'wind'
+      : weather.ignitionReceptivity - weather.spreadPotential >= 14
+      ? 'dryness'
+      : 'balanced'
+    : 'balanced';
+
+  const distScore = clamp(100 - district.nearestStationDistKm * 9.5, 18, 96);
+  const roadScore = ACCESS_SCORE_BY_GRADE[district.roadAccessibilityGrade];
+  const stationBonus = clamp(district.fireStationsCount * 8, 6, 24);
+  const readinessScore = Math.round(clamp(0.45 * distScore + 0.4 * roadScore + 0.15 * stationBonus, 12, 98));
+  const estResponseMin = Math.max(4, Math.round(district.nearestStationDistKm * 2.4 + (100 - roadScore) * 0.08));
+
+  const mlUnlocked = Boolean(mlModel && mlModel.gatePassed && mlModel.status === 'validated');
+  let districtProbPct: number | null = null;
+  let ciLowPct: number | null = null;
+  let ciHighPct: number | null = null;
+
+  if (mlUnlocked && mlModel?.khorooProbabilities) {
+    const matchingKeys = Object.keys(mlModel.khorooProbabilities).filter((k) =>
+      k.startsWith(`${district.id}-`)
+    );
+    if (matchingKeys.length > 0) {
+      const meanP =
+        matchingKeys.reduce((s, k) => s + (mlModel.khorooProbabilities![k]?.probPct ?? 0), 0) /
+        matchingKeys.length;
+      const meanLow =
+        matchingKeys.reduce((s, k) => s + (mlModel.khorooProbabilities![k]?.ciLowPct ?? 0), 0) /
+        matchingKeys.length;
+      const meanHigh =
+        matchingKeys.reduce((s, k) => s + (mlModel.khorooProbabilities![k]?.ciHighPct ?? 0), 0) /
+        matchingKeys.length;
+      districtProbPct = Math.round(meanP * 10) / 10;
+      ciLowPct = Math.round(meanLow * 10) / 10;
+      ciHighPct = Math.round(meanHigh * 10) / 10;
+    }
+  }
+
+  return {
+    ignitionProbability: {
+      unlocked: mlUnlocked && districtProbPct !== null,
+      probabilityPct: districtProbPct,
+      ciLowPct,
+      ciHighPct,
+      uncertaintyLabelMn:
+        mlUnlocked && districtProbPct !== null
+          ? `95% CI: ${ciLowPct}%–${ciHighPct}% (ECE ${(mlModel?.metrics.ece ?? 0).toFixed(3)})`
+          : `Бодит өгөгдөл: ${verifiedRealCount}/200+ (Магадлал түгжээтэй)`,
+      uncertaintyLabelEn:
+        mlUnlocked && districtProbPct !== null
+          ? `95% CI: ${ciLowPct}%–${ciHighPct}% (ECE ${(mlModel?.metrics.ece ?? 0).toFixed(3)})`
+          : `Verified real rows: ${verifiedRealCount}/200+ (Probability locked)`,
+      reasonMn:
+        mlUnlocked && districtProbPct !== null
+          ? 'Open-Meteo болон бодит түүхэн бүртгэл дээр шалгагдсан ML магадлал.'
+          : mlModel?.gateReasonsMn?.[0] ||
+            'Бодит түүхэн галын бүртгэл ба түр хугацааны шалгалт хангалтгүй тул зохиомол % гаргаагүй.',
+      reasonEn:
+        mlUnlocked && districtProbPct !== null
+          ? 'Calibrated ML ignition probability verified against real incidents and Open-Meteo archive.'
+          : mlModel?.gateReasonsEn?.[0] ||
+            'Locked until verified real incident logs and temporal calibration pass validation gates.',
+      modelVersion: mlModel?.modelVersion,
+      calibrationEce: mlModel?.metrics.ece ?? null,
+    },
+    spreadHazard: {
+      index: spreadIndex,
+      level: riskLevelFromScore(spreadIndex),
+      fuelComponent: district.gerHouseholdPercent,
+      weatherSpreadComponent: Math.round(spreadPotential),
+      dominantDriver: driver,
+      weatherApplied: hasWeather,
+    },
+    responseCapability: {
+      readinessScore,
+      grade: district.roadAccessibilityGrade,
+      nearestStationDistKm: district.nearestStationDistKm,
+      estResponseMin,
+      accessConstraintLabelMn: `${district.roadAccessibilityGrade} зэрэг · ~${district.nearestStationDistKm} км`,
+      accessConstraintLabelEn: `Grade ${district.roadAccessibilityGrade} · ~${district.nearestStationDistKm} km`,
+    },
+    reliability: {
+      dataOrigin:
+        mlUnlocked && districtProbPct !== null
+          ? 'real_ml'
+          : hasWeather
+          ? 'heuristic_with_live_weather'
+          : 'heuristic_baseline',
+      confidenceTier: mlUnlocked ? 'high' : hasWeather ? 'moderate' : 'low',
+      notesMn: mlUnlocked
+        ? 'Бодит түүхэн гал + Open-Meteo дүүргийн цаг агаараар баталгаажсан.'
+        : hasWeather
+        ? 'Дүүргийн бодит цагийн Open-Meteo цаг агаар холбогдсон эвристик индекс.'
+        : 'Зөвхөн суурь эвристик өгөгдөл (цаг агаар болон бодит ML хүлээгдэж байна).',
+      notesEn: mlUnlocked
+        ? 'Backed by verified historical records and Open-Meteo district telemetry.'
+        : hasWeather
+        ? 'Composite hazard index updated with district-level Open-Meteo telemetry.'
+        : 'Baseline heuristic index only (awaiting live weather / verified real ML logs).',
+    },
+  };
+}
+
+export function computeKhorooThreeAxisRisk(params: {
+  khoroo: KhorooData;
+  district: DistrictData;
+  weather?: DistrictWeatherSnapshot | null;
+  mlModel?: MlModelArtifact | null;
+  verifiedRealCount?: number;
+}): ThreeAxisRiskProfile {
+  const { khoroo, district, weather, mlModel, verifiedRealCount = 0 } = params;
+  const hasWeather = Boolean(weather);
+  const fwi = weather?.fireWeatherIndex ?? 50;
+  const spreadPotential = weather?.spreadPotential ?? 45;
+
+  const spreadIndex = Math.round(
+    clamp(
+      0.54 * khoroo.gerHouseholdPercent +
+        0.28 * spreadPotential +
+        0.18 * clamp(fwi, 0, 100),
+      6,
+      98
+    )
+  );
+
+  const grade = ACCESS_GRADE_BY_KHOROO[khoroo.roadAccessibility];
+  const roadScore = ACCESS_SCORE_BY_GRADE[grade];
+  const hydrantScore = clamp(khoroo.fireHydrantCount * 9, 10, 95);
+  const etaScore = clamp(100 - (khoroo.avgResponseTimeMin - 3) * 5.4, 15, 96);
+  const readinessScore = Math.round(clamp(0.45 * etaScore + 0.35 * roadScore + 0.2 * hydrantScore, 10, 98));
+
+  const mlUnlocked = Boolean(mlModel && mlModel.gatePassed && mlModel.status === 'validated');
+  const kKey = `${khoroo.districtId}-${khoroo.khorooNumber}`;
+  const kProb = mlUnlocked ? mlModel?.khorooProbabilities?.[kKey] : undefined;
+
+  return {
+    ignitionProbability: {
+      unlocked: Boolean(mlUnlocked && kProb),
+      probabilityPct: kProb ? Math.round(kProb.probPct * 10) / 10 : null,
+      ciLowPct: kProb ? Math.round(kProb.ciLowPct * 10) / 10 : null,
+      ciHighPct: kProb ? Math.round(kProb.ciHighPct * 10) / 10 : null,
+      uncertaintyLabelMn: kProb
+        ? `95% CI: ${kProb.ciLowPct.toFixed(1)}%–${kProb.ciHighPct.toFixed(1)}%`
+        : `Бодит өгөгдөл: ${verifiedRealCount}/200+ (Магадлал түгжээтэй)`,
+      uncertaintyLabelEn: kProb
+        ? `95% CI: ${kProb.ciLowPct.toFixed(1)}%–${kProb.ciHighPct.toFixed(1)}%`
+        : `Verified real rows: ${verifiedRealCount}/200+ (Probability locked)`,
+      reasonMn: kProb
+        ? 'Бодит хорооны түүх болон Open-Meteo ажиглалт дээр калибровклагдсан магадлал.'
+        : mlModel?.gateReasonsMn?.[0] ||
+          'Хорооны түвшний бодит түүхэн бүртгэл ба ML баталгаажуулалт хүрэлцэхгүй тул магадлал (%) харуулахгүй.',
+      reasonEn: kProb
+        ? 'Calibrated khoroo-level probability verified against historical incidents and Open-Meteo.'
+        : mlModel?.gateReasonsEn?.[0] ||
+          'Locked until verified real incident data and temporal calibration gates are met.',
+      modelVersion: mlModel?.modelVersion,
+      calibrationEce: mlModel?.metrics.ece ?? null,
+    },
+    spreadHazard: {
+      index: spreadIndex,
+      level: riskLevelFromScore(spreadIndex),
+      fuelComponent: khoroo.gerHouseholdPercent,
+      weatherSpreadComponent: Math.round(spreadPotential),
+      dominantDriver: weather
+        ? weather.precipitationMm >= 2 || weather.humidityPercent >= 75
+          ? 'moisture'
+          : weather.spreadPotential - weather.ignitionReceptivity >= 14
+          ? 'wind'
+          : weather.ignitionReceptivity - weather.spreadPotential >= 14
+          ? 'dryness'
+          : 'balanced'
+        : 'balanced',
+      weatherApplied: hasWeather,
+    },
+    responseCapability: {
+      readinessScore,
+      grade,
+      nearestStationDistKm: district.nearestStationDistKm,
+      estResponseMin: khoroo.avgResponseTimeMin,
+      hydrantCount: khoroo.fireHydrantCount,
+      accessConstraintLabelMn: `${khoroo.roadAccessibility} · ${khoroo.fireHydrantCount} гидрант · ~${khoroo.avgResponseTimeMin} мин`,
+      accessConstraintLabelEn: `Grade ${grade} · ${khoroo.fireHydrantCount} hydrants · ~${khoroo.avgResponseTimeMin} min`,
+    },
+    reliability: {
+      dataOrigin: kProb
+        ? 'real_ml'
+        : hasWeather
+        ? 'heuristic_with_live_weather'
+        : 'heuristic_baseline',
+      confidenceTier: kProb ? 'high' : khoroo.isModelled ? 'low' : 'moderate',
+      notesMn: khoroo.isModelled
+        ? 'Загварчилсан хороо + бодит цаг агаарын тооцоолол.'
+        : 'Бодит хорооны үндсэн бүртгэл + дүүргийн Open-Meteo цаг агаар.',
+      notesEn: khoroo.isModelled
+        ? 'Synthesized khoroo parameters adjusted by district Open-Meteo telemetry.'
+        : 'Curated khoroo baseline adjusted by district Open-Meteo telemetry.',
+    },
+  };
+}
+
+/**
+ * Privacy-preserving k-anonymity spatial aggregation for public heatmaps:
+ * merges sparse real incidents at household precision into district/khoroo centroids
+ * so fewer than `kMin` (default 5) real coordinates never expose an individual home location.
+ */
+export function aggregateHeatPointsWithKAnonymity(
+  incidents: Array<{
+    districtId: string;
+    khorooNumber: number;
+    lat: number;
+    lng: number;
+    severity: string;
+  }>,
+  districtCenters: Record<string, [number, number]>,
+  kMin = 5
+): PublicHeatCluster[] {
+  const byKhoroo = new Map<
+    string,
+    {
+      districtId: string;
+      khorooNumber: number;
+      latSum: number;
+      lngSum: number;
+      count: number;
+      criticalCount: number;
+    }
+  >();
+
+  for (const inc of incidents) {
+    const key = `${inc.districtId}-${inc.khorooNumber}`;
+    const prev = byKhoroo.get(key);
+    if (!prev) {
+      byKhoroo.set(key, {
+        districtId: inc.districtId,
+        khorooNumber: inc.khorooNumber,
+        latSum: inc.lat,
+        lngSum: inc.lng,
+        count: 1,
+        criticalCount: inc.severity === 'critical' ? 1 : 0,
+      });
+    } else {
+      prev.latSum += inc.lat;
+      prev.lngSum += inc.lng;
+      prev.count += 1;
+      if (inc.severity === 'critical') prev.criticalCount += 1;
+    }
+  }
+
+  const out: PublicHeatCluster[] = [];
+  for (const [key, g] of byKhoroo.entries()) {
+    const satisfiesK = g.count >= kMin;
+    const fallbackCenter = districtCenters[g.districtId] ?? [47.9184, 106.9177];
+    // Snap sparse clusters (< kMin) to district centroid / coarse 0.01 deg grid (~1.1 km) to protect household PII
+    const lat = satisfiesK
+      ? Number((g.latSum / g.count).toFixed(3))
+      : Number(fallbackCenter[0].toFixed(2));
+    const lng = satisfiesK
+      ? Number((g.lngSum / g.count).toFixed(3))
+      : Number(fallbackCenter[1].toFixed(2));
+
+    out.push({
+      clusterId: key,
+      districtId: g.districtId,
+      khorooNumber: satisfiesK ? g.khorooNumber : 0,
+      lat,
+      lng,
+      incidentCount: g.count,
+      criticalCount: g.criticalCount,
+      kAnonymitySatisfied: satisfiesK,
+      isPublicAggregated: true,
+    });
+  }
+  return out;
+}
+
+/**
+ * Prevents redundant double-counting between reference hotspot anchors and dense khoroo
+ * centers by removing reference hotspots that sit within 450m of an equally-weighted
+ * khoroo center while retaining distant corridor anchors cleanly.
+ */
+export function mergeSpatialHeatSources(
+  hotspots: SpatialHeatPoint[],
+  khorooPoints: SpatialHeatPoint[]
+): SpatialHeatPoint[] {
+  const merged = [...khorooPoints];
+  for (const h of hotspots) {
+    const duplicateNear = khorooPoints.some(
+      (k) => approxDistanceKm(h.lat, h.lng, k.lat, k.lng) < 0.45 && Math.abs(h.score - k.score) < 12
+    );
+    if (!duplicateNear) {
+      merged.push(h);
+    }
+  }
+  return merged;
 }

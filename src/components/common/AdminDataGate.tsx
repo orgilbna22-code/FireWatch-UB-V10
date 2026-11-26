@@ -30,7 +30,7 @@ export const AdminDataGate: React.FC<AdminDataGateProps> = ({ language }) => {
           <button
             type="button"
             onClick={() => void apiHealth.recheck()}
-            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-[11px] font-bold text-[#0B124D] hover:bg-slate-50"
+            className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-[#0B124D] hover:bg-slate-50"
           >
             {isMn ? 'Дахин шалгах' : 'Retry'}
           </button>

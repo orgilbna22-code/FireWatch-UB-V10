@@ -1,197 +1,174 @@
-import type { DistrictData, KhorooData, RiskLevel } from '../types';
-import { clampPointInsidePolygon } from '../utils/riskEngine';
+import type { DistrictData, KhorooData } from '../types';
+import {
+  clamp,
+  clampPointInsidePolygon,
+  computeSynthesizedKhorooScore,
+  riskLevelFromScore,
+} from '../utils/riskEngine';
 import { UB_MEDIA } from './ubMediaAssets';
-
-/**
- * Deterministic synthesis of the khoroos that the hand-authored dataset does not
- * cover (Ulaanbaatar has 204 khoroos across its nine districts; only a sample is
- * curated). Generated units are flagged `isModelled` so every view can say so, and
- * their risk score is *derived* from their own attributes rather than typed in, so
- * the list stays internally consistent. Coordinates are clamped inside the
- * parent district's polygon boundary.
- */
-const LEVEL = (s: number): RiskLevel =>
-  s >= 75 ? 'very_high' : s >= 55 ? 'high' : s >= 35 ? 'moderate' : 'low';
-
-/** Shared with the curated dataset so both halves obey the same rule. */
-export const khorooRiskLevel = LEVEL;
-
-type Access = KhorooData['roadAccessibility'];
-
-const ACCESS_RISK: Record<Access, number> = {
-  Сайн: 18,
-  Дунд: 42,
-  Муу: 68,
-  'Маш муу': 86,
-};
-
-const ACCESS_BY_INDEX: Access[] = ['Сайн', 'Дунд', 'Муу', 'Маш муу'];
-
-interface Profile {
-  key: 'apartment' | 'mixed' | 'ger';
-  nameMn: string;
-  nameEn: string;
-  factorMn: string;
-  factorEn: string;
-  photo: string;
-}
-
-const PROFILES: Profile[] = [
-  {
-    key: 'apartment',
-    nameMn: 'Орон сууцны хороолол',
-    nameEn: 'Apartment block',
-    factorMn: 'Хуучарсан цахилгаан сүлжээ, орон сууцны орцны зам саад, дулааны сүлжээний засвар.',
-    factorEn: 'Aged wiring risers, obstructed entryways and district-heating maintenance work.',
-    photo: UB_MEDIA.apartment,
-  },
-  {
-    key: 'mixed',
-    nameMn: 'Хольсон суурин',
-    nameEn: 'Mixed settlement',
-    factorMn: 'Гэр ба орон сууц аралассан, хашаа модон, ахуйн хэрэглээний галын аюул.',
-    factorEn: 'Timber fences between detached homes and apartments, household heating hazards.',
-    photo: UB_MEDIA.mixed,
-  },
-  {
-    key: 'ger',
-    nameMn: 'Гэр хороолол',
-    nameEn: 'Ger settlement',
-    factorMn: 'Зуух, үнс, нүүрсний ил агуулах, нарийн гудамж ба уулын налуу нь гал тарах эрсдэлийг нэмэгдүүлнэ.',
-    factorEn: 'Stove cinders, narrow lanes and hillside gradients let fire jump between plots.',
-    photo: UB_MEDIA.ger,
-  },
-];
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-function hashSeed(text: string): number {
+function hashSeed(str: string): number {
   let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const ROAD_LEVELS: KhorooData['roadAccessibility'][] = ['Сайн', 'Дунд', 'Муу', 'Маш муу'];
 
-export function synthesizeKhoroos(district: DistrictData, curated: KhorooData[]): KhorooData[] {
-  const missing: number[] = [];
-  const taken = new Set(curated.map((k) => k.khorooNumber));
-  for (let n = 1; n <= district.khoroosCount; n++) {
-    if (!taken.has(n)) missing.push(n);
-  }
-  if (missing.length === 0) return [];
+const PREFIX_SHORT: Record<string, string> = {
+  bayanzurkh: 'bzd',
+  songinokhairkhan: 'shd',
+  chingeltei: 'chd',
+  sukhbaatar: 'sbd',
+  'khan-uul': 'hud',
+  bayangol: 'bgd',
+  nalaikh: 'nlh',
+  baganuur: 'bgn',
+  bagakhangai: 'bkh',
+};
 
-  const curatedPop = curated.reduce((s, k) => s + k.population, 0);
-  const remainingPop = Math.max(missing.length * 400, district.population - curatedPop);
+export function synthesizeKhoroos(
+  districts: DistrictData[],
+  curatedKhoroos: KhorooData[]
+): KhorooData[] {
+  const existingKeys = new Set(
+    curatedKhoroos.map((k) => `${k.districtId}-${k.khorooNumber}`)
+  );
 
-  const footprintRadiusKm = Math.sqrt(district.areaKm2 / Math.PI);
-  const spreadDeg = clamp((footprintRadiusKm / 111) * 0.55, 0.01, 0.065);
+  const generated: KhorooData[] = [];
 
-  const weights: number[] = [];
-  const prng = mulberry32(hashSeed(district.id));
-  for (let i = 0; i < missing.length; i++) weights.push(0.6 + prng() * 0.9);
-  const weightSum = weights.reduce((s, w) => s + w, 0);
+  for (const dist of districts) {
+    const prefix = PREFIX_SHORT[dist.id] ?? dist.id.slice(0, 3);
+    const rng = mulberry32(hashSeed(`firewatch-${dist.id}`));
+    const avgPopPerKhoroo = Math.max(2200, Math.round(dist.population / Math.max(1, dist.khoroosCount)));
 
-  const gradeOffset =
-    district.roadAccessibilityGrade === 'A'
-      ? -1
-      : district.roadAccessibilityGrade === 'B'
-      ? -0.4
-      : district.roadAccessibilityGrade === 'C'
-      ? 0.6
-      : 1.3;
+    // Compute geographic span inside polygon bounding box
+    let minLat = dist.center[0] - 0.025;
+    let maxLat = dist.center[0] + 0.025;
+    let minLng = dist.center[1] - 0.035;
+    let maxLng = dist.center[1] + 0.035;
+    if (dist.polygon.length >= 3) {
+      minLat = Math.min(...dist.polygon.map((p) => p[0]));
+      maxLat = Math.max(...dist.polygon.map((p) => p[0]));
+      minLng = Math.min(...dist.polygon.map((p) => p[1]));
+      maxLng = Math.max(...dist.polygon.map((p) => p[1]));
+    }
+    const latSpan = (maxLat - minLat) * 0.72;
+    const lngSpan = (maxLng - minLng) * 0.72;
 
-  const out: KhorooData[] = [];
-  let allocated = 0;
+    for (let num = 1; num <= dist.khoroosCount; num++) {
+      const key = `${dist.id}-${num}`;
+      if (existingKeys.has(key)) continue;
 
-  for (let i = 0; i < missing.length; i++) {
-    const number = missing[i];
-    const isLast = i === missing.length - 1;
-    const population = isLast
-      ? Math.max(400, remainingPop - allocated)
-      : Math.round((remainingPop * weights[i]) / weightSum);
-    allocated += population;
+      const angle = (num / Math.max(1, dist.khoroosCount)) * Math.PI * 2 + rng() * 0.55;
+      const radial = 0.22 + rng() * 0.72;
+      const rawLat = dist.center[0] + Math.sin(angle) * latSpan * 0.5 * radial;
+      const rawLng = dist.center[1] + Math.cos(angle) * lngSpan * 0.5 * radial;
+      const clampedCenter = clampPointInsidePolygon(rawLat, rawLng, dist.polygon, dist.center);
 
-    const r = mulberry32(hashSeed(`${district.id}:${number}`));
-    const gerHouseholdPercent = Math.round(
-      clamp(district.gerHouseholdPercent + (r() - 0.42) * 46 + gradeOffset * 4, 2, 98)
-    );
-    const profile: Profile =
-      gerHouseholdPercent >= 62 ? PROFILES[2] : gerHouseholdPercent >= 26 ? PROFILES[1] : PROFILES[0];
+      const gerHouseholdPercent = Math.round(
+        clamp(dist.gerHouseholdPercent + (rng() - 0.5) * 38, 4, 96)
+      );
+      const apartmentHouseholdPercent = 100 - gerHouseholdPercent;
 
-    const households = Math.max(
-      90,
-      Math.round(population / (3.35 + (gerHouseholdPercent / 100) * 1.7))
-    );
-    const accessIdx = Math.round(
-      clamp(1.4 + gradeOffset + (gerHouseholdPercent / 100) * 1.6 + (r() - 0.5) * 1.1, 0, 3)
-    );
-    const roadAccessibility = ACCESS_BY_INDEX[accessIdx];
-    const fireHydrantCount = Math.max(1, Math.round(clamp(13 - gerHouseholdPercent / 9 + r() * 4, 1, 16)));
-    const avgResponseTimeMin = Math.round(
-      clamp(4 + gerHouseholdPercent * 0.1 + accessIdx * 1.8 + r() * 3, 3, 22)
-    );
+      const population = Math.round(clamp(avgPopPerKhoroo * (0.65 + rng() * 0.7), 1800, 26000));
+      const households = Math.max(450, Math.round(population / 3.7));
 
-    const riskScore = Math.round(
-      clamp(
-        0.34 * gerHouseholdPercent +
-          0.2 * ACCESS_RISK[roadAccessibility] +
-          0.18 * clamp(100 - fireHydrantCount * 8, 0, 100) +
-          0.16 * clamp((avgResponseTimeMin - 3) * 6.5, 0, 100) +
-          0.12 * clamp(population / 240, 0, 100),
-        12,
-        96
-      )
-    );
+      const roadAccessibility: KhorooData['roadAccessibility'] =
+        gerHouseholdPercent >= 78
+          ? rng() > 0.45
+            ? 'Маш муу'
+            : 'Муу'
+          : gerHouseholdPercent >= 45
+          ? rng() > 0.5
+            ? 'Муу'
+            : 'Дунд'
+          : rng() > 0.35
+          ? 'Сайн'
+          : 'Дунд';
 
-    const dLat = ((r() + r()) / 2 - 0.5) * 2 * spreadDeg;
-    const dLng = ((r() + r()) / 2 - 0.5) * 2 * spreadDeg * 1.35;
-    const clampedCenter = clampPointInsidePolygon(
-      +(district.center[0] + dLat).toFixed(4),
-      +(district.center[1] + dLng).toFixed(4),
-      district.polygon,
-      district.center
-    );
-
-    out.push({
-      id: `${district.id}-${number}`,
-      districtId: district.id,
-      khorooNumber: number,
-      nameMn: `${number}-р хороо (${profile.nameMn})`,
-      nameEn: `${number}th Khoroo (${profile.nameEn})`,
-      center: clampedCenter,
-      population,
-      households,
-      gerHouseholdPercent,
-      apartmentHouseholdPercent: 100 - gerHouseholdPercent,
-      riskScore,
-      riskLevel: LEVEL(riskScore),
-      primaryRiskFactorMn: profile.factorMn,
-      primaryRiskFactorEn: profile.factorEn,
-      fireHydrantCount,
-      roadAccessibility,
-      avgResponseTimeMin,
-      historicalIncidents2024_2026: Math.max(
+      const roadTier = ROAD_LEVELS.indexOf(roadAccessibility);
+      const fireHydrantCount = Math.max(
         1,
-        Math.round((population / 1000) * (riskScore / 100) * 2.1)
-      ),
-      photoUrl: profile.photo,
-      landmarksMn: [],
-      landmarksEn: [],
-      isModelled: true,
-    });
+        Math.round(clamp(12 - gerHouseholdPercent / 10 - roadTier * 1.4 + (rng() - 0.5) * 3, 1, 16))
+      );
+      const avgResponseTimeMin = Math.round(
+        clamp(dist.nearestStationDistKm * 2.1 + roadTier * 2.2 + rng() * 3, 4, 24)
+      );
+
+      const rawSynth = computeSynthesizedKhorooScore({
+        gerHouseholdPercent,
+        roadAccessibility,
+        fireHydrantCount,
+        avgResponseTimeMin,
+        population,
+      });
+      // Anchor lightly toward parent district heuristic baseline while preserving variance
+      const riskScore = Math.round(clamp(rawSynth * 0.65 + dist.riskScore * 0.35, 14, 95));
+
+      const historicalIncidents2024_2026 = Math.max(
+        2,
+        Math.round((dist.historicalIncidentsCount / Math.max(1, dist.khoroosCount)) * (0.45 + (riskScore / 100) * 1.1))
+      );
+
+      const photoUrl =
+        gerHouseholdPercent >= 65
+          ? UB_MEDIA.ger
+          : gerHouseholdPercent >= 30
+          ? UB_MEDIA.mixed
+          : UB_MEDIA.apartment;
+
+      generated.push({
+        id: `${prefix}-${num}`,
+        districtId: dist.id,
+        khorooNumber: num,
+        nameMn: `${num}-р хороо`,
+        nameEn: `Khoroo ${num}`,
+        center: clampedCenter,
+        population,
+        households,
+        gerHouseholdPercent,
+        apartmentHouseholdPercent,
+        riskScore,
+        riskLevel: riskLevelFromScore(riskScore),
+        primaryRiskFactorMn:
+          gerHouseholdPercent >= 65
+            ? 'Зуух, хатуу түлш ба хашааны нягтрал (загварчилсан)'
+            : gerHouseholdPercent >= 30
+            ? 'Холимог суурьшил ба шөнийн цахилгаан ачаалал (загварчилсан)'
+            : 'Орон сууцны цахилгаан ба замын хөдөлгөөний саад (загварчилсан)',
+        primaryRiskFactorEn:
+          gerHouseholdPercent >= 65
+            ? 'Solid-fuel stoves & dense yard plots (modelled estimate)'
+            : gerHouseholdPercent >= 30
+            ? 'Mixed housing & peak winter electrical load (modelled estimate)'
+            : 'Apartment wiring load & courtyard access (modelled estimate)',
+        fireHydrantCount,
+        roadAccessibility,
+        avgResponseTimeMin,
+        historicalIncidents2024_2026,
+        photoUrl,
+        landmarksMn: [`${dist.nameMn} дүүргийн ${num}-р хорооны төв хэсэг`],
+        landmarksEn: [`${dist.nameEn} District Khoroo ${num} Sector`],
+        isModelled: true,
+        locationConfidence: 'synthetic_offset',
+      });
+    }
   }
 
-  return out;
+  return generated;
 }

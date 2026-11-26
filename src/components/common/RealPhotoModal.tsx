@@ -1,6 +1,7 @@
 import React from 'react';
 import { Language } from '../../types';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { getResponsiveMediaSources } from '../../data/ubMediaAssets';
 
 interface RealPhotoModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
               📷
             </span>
             <div className="min-w-0">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-white/50 block truncate">
+              <span className="text-xs font-mono uppercase tracking-widest text-white/50 block truncate">
                 {language === 'mn' ? 'БОДИТ ОРОН ЗАЙН ХАРАГДАЦ' : 'REAL SPATIAL INSPECTION'}
               </span>
               <h3 className="font-editorial text-lg sm:text-2xl font-bold tracking-tight truncate">
@@ -72,7 +73,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
               <div className="flex items-center bg-white/10 p-1 rounded-full text-xs font-semibold">
                 <button
                   onClick={() => setViewType('photo')}
-                  className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs transition-all ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-xs transition-all ${
                     viewType === 'photo'
                       ? 'bg-white text-[#0B124D]'
                       : 'text-white/70 hover:text-white'
@@ -82,7 +83,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
                 </button>
                 <button
                   onClick={() => setViewType('satellite')}
-                  className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs transition-all ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-xs transition-all ${
                     viewType === 'satellite'
                       ? 'bg-[#FF633C] text-white'
                       : 'text-white/70 hover:text-white'
@@ -95,7 +96,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+              className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
               aria-label={language === 'mn' ? 'Хаах' : 'Close'}
             >
               ✕
@@ -106,35 +107,53 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Main Visual Display */}
-          <div className="relative w-full h-[220px] sm:h-[360px] md:h-[420px] rounded-2xl overflow-hidden bg-black/40 border border-white/10 shadow-inner group">
-            <img
-              src={viewType === 'photo' ? photoUrl : (satelliteUrl || photoUrl)}
-              alt={title}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            />
+          {(() => {
+            const activeSrc = viewType === 'photo' ? photoUrl : satelliteUrl || photoUrl;
+            const media = getResponsiveMediaSources(activeSrc);
+            return (
+              <div className="relative w-full h-[220px] sm:h-[360px] md:h-[420px] rounded-2xl overflow-hidden bg-black/40 border border-white/10 shadow-inner group">
+                <picture className="block w-full h-full">
+                  {media.avifSrcSet && (
+                    <source type="image/avif" srcSet={media.avifSrcSet} sizes="(max-width: 768px) 95vw, 860px" />
+                  )}
+                  {media.webpSrcSet && (
+                    <source type="image/webp" srcSet={media.webpSrcSet} sizes="(max-width: 768px) 95vw, 860px" />
+                  )}
+                  <img
+                    src={media.fallback}
+                    alt={title}
+                    width={media.width}
+                    height={media.height}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                </picture>
             
             {/* Overlay Badges */}
             <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="px-2.5 sm:px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-white font-mono text-[10px] sm:text-xs font-bold border border-white/20">
+              <span className="px-2.5 sm:px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-white font-mono text-xs sm:text-xs font-bold border border-white/20">
                 {viewType === 'photo'
                   ? (language === 'mn' ? '📍 Бодит гэрэл зураг' : '📍 Ground photo')
                   : (language === 'mn' ? '🛰️ 4K Ортофото зураг' : '🛰️ 4K orthophoto')}
               </span>
               {riskScore !== undefined && (
-                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-[#FF633C] text-white font-mono text-[10px] sm:text-xs font-bold shadow-md">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-[#FF633C] text-white font-mono text-xs sm:text-xs font-bold shadow-md">
                   {language === 'mn' ? 'Эрсдэл' : 'Risk'}: {riskScore}/100
                 </span>
               )}
             </div>
 
-            <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-black/60 backdrop-blur-md text-[9px] sm:text-[10px] font-mono text-white/60">
+            <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-black/60 backdrop-blur-md text-xs sm:text-xs font-mono text-white/60">
               UB High-Res GIS Imagery
             </div>
-          </div>
+              </div>
+            );
+          })()}
 
           {/* Description & Field Observations */}
           <div className="bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-semibold block mb-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-[#FF633C] font-semibold block mb-1">
               {language === 'mn' ? 'Байршлын бодит нөхцөл байдал' : 'Field Condition Report'}
             </span>
             <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
@@ -147,7 +166,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               {metrics.map((m, idx) => (
                 <div key={idx} className="bg-white/5 p-2.5 sm:p-3 rounded-2xl border border-white/10">
-                  <span className="text-[9px] sm:text-[10px] font-mono text-white/50 block mb-0.5 truncate">
+                  <span className="text-xs sm:text-xs font-mono text-white/50 block mb-0.5 truncate">
                     {m.label}
                   </span>
                   <span className="font-mono text-xs sm:text-sm font-bold text-white truncate block">
@@ -161,7 +180,7 @@ export const RealPhotoModal: React.FC<RealPhotoModalProps> = ({
 
         {/* Modal Footer */}
         <div className="p-3.5 sm:p-4 border-t border-white/10 bg-black/30 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
-          <span className="text-[10px] sm:text-xs text-white/50 font-mono truncate">
+          <span className="text-xs sm:text-xs text-white/50 font-mono truncate">
             {language === 'mn'
               ? 'Эх сурвалж: Нийслэлийн газарзүйн мэдээллийн нэгдсэн сан & ОБЕГ'
               : 'Source: Ulaanbaatar Unified Geospatial Database & NEMA'}

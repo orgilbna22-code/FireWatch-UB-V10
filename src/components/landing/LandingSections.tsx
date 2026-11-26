@@ -22,12 +22,13 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
   const t = getTranslation(language);
 
   return (
-    <div className="w-full bg-[#FFFFFF]">
+    <div className="w-full bg-transparent py-2 sm:py-4 pb-10 space-y-6">
       
       {/* ========================================================= */}
       {/* 02. АСУУДАЛ (THE PROBLEM DEEP DIVE)                       */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-12 md:py-16 px-5 sm:px-8 lg:px-12">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
             02 · {language === 'mn' ? 'ХОТЫН СОРИЛТ' : 'URBAN CHALLENGE'}
@@ -88,13 +89,14 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
             </p>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
       {/* 04. LIVE UB MAP PREVIEW CALLOUT                           */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
-        <div className="bg-[#0B124D] rounded-3xl p-8 md:p-14 text-white relative overflow-hidden">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-[#0B124D] border border-white/15 shadow-[0_24px_60px_-15px_rgba(6,10,36,0.5)] rounded-[28px] sm:rounded-[36px] p-8 md:p-14 text-white relative overflow-hidden">
           <div className="max-w-2xl relative z-10">
             <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-3">
               04 · {language === 'mn' ? 'ОРОН ЗАЙН ЗУРАГЛАЛ' : 'GIS SPATIAL PLATFORM'}
@@ -131,7 +133,8 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
       {/* ========================================================= */}
       {/* 05. HOW RISK IS CALCULATED (TRANSPARENT METHODOLOGY)      */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-12 md:py-16 px-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
             05 · {language === 'mn' ? 'ИЛ ТОД ЗАГВАРЧЛАЛ' : 'TRANSPARENT METHODOLOGY'}
@@ -163,7 +166,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono font-bold text-[#72778A] uppercase">
+                  <span className="text-xs font-mono font-bold text-[#72778A] uppercase">
                     {v.code}
                   </span>
                   <span className="text-xs font-mono font-bold text-[#0B124D] bg-white px-2 py-0.5 rounded border border-[#0B124D]/10">
@@ -177,8 +180,8 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
                   {language === 'mn' ? v.descriptionMn : v.descriptionEn}
                 </p>
               </div>
-              <div className="pt-3 border-t border-[#0B124D]/8 text-[11px] font-mono text-[#72778A]">
-                <span className="block text-[10px] uppercase text-[#72778A]/70 mb-0.5">
+              <div className="pt-3 border-t border-[#0B124D]/8 text-xs font-mono text-[#72778A]">
+                <span className="block text-xs uppercase text-[#72778A]/70 mb-0.5">
                   {language === 'mn' ? 'Эх сурвалж' : 'Data Source'}:
                 </span>
                 <span className="truncate block">
@@ -188,12 +191,14 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
       {/* 06. DISTRICT ANALYSIS HIGHLIGHTS                          */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-12 md:py-16 px-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
             06 · {language === 'mn' ? 'ДҮҮРГҮҮДИЙН ТӨЛӨВ' : 'DISTRICT SPECTRUM'}
@@ -247,7 +252,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
               </p>
               <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[#0B124D]/8 text-center">
                 <div>
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Гэр өрх' : 'Ger Ratio'}
                   </span>
                   <span className="text-xs font-mono font-bold text-[#0B124D]">
@@ -255,7 +260,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Ангийн тоо' : 'Stations'}
                   </span>
                   <span className="text-xs font-mono font-bold text-[#0B124D]">
@@ -263,7 +268,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Замын зэрэг' : 'Road Access'}
                   </span>
                   <span className="text-xs font-mono font-bold text-[#0B124D]">
@@ -274,12 +279,14 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
       {/* 07. 12-MONTH ANALYSIS STRIP                               */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-12 md:py-16 px-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
             07 · {language === 'mn' ? 'УЛИРЛЫН ХУАНЛИ' : 'ANNUAL RISK CYCLE'}
@@ -318,7 +325,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
                     {language === 'mn' ? m.shortMn : m.shortEn}
                   </span>
                   <span
-                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
                       isVeryHigh
                         ? 'bg-red-100 text-red-700'
                         : isHigh
@@ -329,22 +336,24 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
                     {m.riskScore}
                   </span>
                 </div>
-                <div className="text-[11px] text-[#72778A] truncate mb-1">
+                <div className="text-xs text-[#72778A] truncate mb-1">
                   {m.avgTempCelsius}°C · {m.windSpeedKmh} {unitKmPerHour(language === 'mn')}
                 </div>
-                <div className="text-[10px] text-[#0B124D] font-medium line-clamp-1">
+                <div className="text-xs text-[#0B124D] font-medium line-clamp-1">
                   {language === 'mn' ? m.primaryDriversMn[0] : m.primaryDriversEn[0]}
                 </div>
               </div>
             );
           })}
         </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
       {/* 08. SAFETY CENTER PREVIEW                                 */}
       {/* ========================================================= */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-[#0B124D]/10">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-12 md:py-16 px-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase">
             08 · {language === 'mn' ? 'ИРГЭДИЙН АЮУЛГҮЙ БАЙДАЛ' : 'PUBLIC SAFETY KNOWLEDGE'}
@@ -396,12 +405,14 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* ========================================================= */}
       {/* 12. FINAL CTA: Улаанбаатарын эрсдэлийг өгөгдлөөр харцгаая */}
       {/* ========================================================= */}
-      <section className="py-20 md:py-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_20px_50px_-15px_rgba(6,10,36,0.36)] py-14 md:py-20 px-5 sm:px-8 lg:px-12 text-center">
         <div className="max-w-3xl mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-[#0B124D] text-[#FF633C] flex items-center justify-center mx-auto mb-6 shadow-md">
             <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -432,6 +443,7 @@ export const LandingSections: React.FC<LandingSectionsProps> = ({
               {language === 'mn' ? 'Аналитик тайлан үүсгэх' : 'Generate Analytical Report'}
             </button>
           </div>
+        </div>
         </div>
       </section>
 

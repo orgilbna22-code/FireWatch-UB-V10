@@ -22,14 +22,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const isMn = language === 'mn';
   const navItems = AUDIENCE_PROFILES[audience].mainTabs.slice(0, 4).map((id) => ({
     id,
-    label: isMn ? ALL_TAB_METADATA[id].shortMn : ALL_TAB_METADATA[id].shortEn,
+    label:
+      id === 'citizen'
+        ? isMn
+          ? 'Шалгах'
+          : 'Check'
+        : isMn
+        ? ALL_TAB_METADATA[id].shortMn
+        : ALL_TAB_METADATA[id].shortEn,
     icon: ALL_TAB_METADATA[id].icon,
   }));
 
   return (
     <nav
       aria-label={isMn ? 'Гар утасны үндсэн навигаци' : 'Mobile primary navigation'}
-      className="fixed bottom-0 left-0 right-0 z-[1100] lg:hidden bg-white/95 backdrop-blur-xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.12)] pb-[env(safe-area-inset-bottom,0px)]"
+      className="fixed bottom-0 left-0 right-0 z-[1100] lg:hidden bg-white/98 border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.12)] pb-[env(safe-area-inset-bottom,0px)]"
     >
       <div className="grid grid-cols-5 h-16 items-center px-0.5">
         {navItems.map((item) => {
@@ -51,7 +58,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 {item.icon}
               </span>
               <span
-                className={`text-[10px] mt-0.5 tracking-tight font-medium ${
+                className={`text-xs mt-0.5 tracking-tight font-medium truncate max-w-full px-0.5 ${
                   isActive ? 'font-bold text-[#0B124D]' : ''
                 }`}
               >
@@ -63,9 +70,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
         {/* Last button: Menu Drawer Trigger */}
         <button
+          type="button"
           onClick={onOpenMenu}
           className={`flex flex-col items-center justify-center h-full min-h-[44px] transition-all relative ${
-            isMenuOpen ? 'text-[#0B124D]' : 'text-[#72778A] hover:text-[#0B124D]'
+            isMenuOpen ? 'text-[#0B124D]' : 'text-[#5C6275] hover:text-[#0B124D]'
           }`}
         >
           {isMenuOpen && (
@@ -75,7 +83,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             {isMenuOpen ? '✕' : '☰'}
           </div>
           <span
-            className={`text-[10px] mt-0.5 tracking-tight font-medium ${
+            className={`text-xs mt-0.5 tracking-tight font-medium ${
               isMenuOpen ? 'font-bold text-[#0B124D]' : ''
             }`}
           >

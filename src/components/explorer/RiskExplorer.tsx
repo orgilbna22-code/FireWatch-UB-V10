@@ -89,13 +89,13 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleReset}
-              className="px-3.5 py-2 text-xs font-mono font-bold text-[#72778A] hover:text-[#0B124D] bg-white rounded-xl border border-[#0B124D]/10 hover:bg-slate-50 transition-colors shadow-xs"
+              className="px-3.5 py-2.5 min-h-[44px] text-xs font-mono font-bold text-[#72778A] hover:text-[#0B124D] bg-white rounded-xl border border-[#0B124D]/10 hover:bg-slate-50 transition-colors shadow-xs"
             >
               {language === 'mn' ? 'ДАХИН ТОХИРУУЛАХ' : 'RESET'}
             </button>
             <button
               onClick={() => setCompareMode(!compareMode)}
-              className={`px-3.5 py-2 text-xs font-mono font-bold rounded-xl transition-colors shadow-xs ${
+              className={`px-3.5 py-2.5 min-h-[44px] text-xs font-mono font-bold rounded-xl transition-colors shadow-xs ${
                 compareMode
                   ? 'bg-[#0B124D] text-white'
                   : 'bg-white text-[#0B124D] border border-[#0B124D]/10 hover:bg-slate-50'
@@ -105,7 +105,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
             </button>
             <button
               onClick={() => setShowMethodologyModal(true)}
-              className="px-3.5 py-2 text-xs font-mono font-bold text-white bg-[#FF633C] hover:bg-[#e05430] rounded-xl transition-colors shadow-xs"
+              className="px-3.5 py-2.5 min-h-[44px] text-xs font-mono font-bold text-white bg-[#FF633C] hover:bg-[#e05430] rounded-xl transition-colors shadow-xs"
             >
               {language === 'mn' ? 'АРГА ЗҮЙ' : 'METHODOLOGY'}
             </button>
@@ -122,7 +122,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
                 <h3 className="font-bold text-sm text-[#0B124D]">
                   {language === 'mn' ? 'Хүчин зүйлс ба жингийн тохируулга' : 'Factor Weights & Toggles'}
                 </h3>
-                <span className="text-[11px] font-mono text-[#72778A]">
+                <span className="text-xs font-mono text-[#72778A]">
                   Dynamic Weight
                 </span>
               </div>
@@ -342,7 +342,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
                           ? `Өнөөдрийн цаг агаарыг холих (FWI ${live.fireWeatherIndex})`
                           : `Blend live Fire Weather Index (FWI ${live.fireWeatherIndex})`}
                       </span>
-                      <span className="text-[11px] text-[#72778A] block">
+                      <span className="text-xs text-[#72778A] block">
                         {language === 'mn'
                           ? 'Идэвхгүй үед дүүргийн суурь индекстэй 100% таарна.'
                           : 'Off by default so baseline scores match Overview & Map 1:1.'}
@@ -368,7 +368,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
                 </p>
               </div>
               {compareMode && (
-                <span className="text-[11px] font-mono font-bold bg-[#0B124D]/5 text-[#0B124D] px-2 py-1 rounded">
+                <span className="text-xs font-mono font-bold bg-[#0B124D]/5 text-[#0B124D] px-2.5 py-1 rounded">
                   {language === 'mn' ? 'Суурь оноотой харьцуулж байна' : 'Comparing vs Baseline'}
                 </span>
               )}
@@ -396,7 +396,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
                           <span className="font-bold text-sm text-[#0B124D]">
                             {language === 'mn' ? district.nameMn : district.nameEn}
                           </span>
-                          <span className="text-[10px] font-mono text-[#72778A]">
+                          <span className="text-xs font-mono text-[#72778A]">
                             {district.population.toLocaleString()}{' '}
                             {language === 'mn' ? 'хүн ам' : 'residents'} · {district.gerHouseholdPercent}%{' '}
                             {language === 'mn' ? 'гэр' : 'ger'}
@@ -429,12 +429,12 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
 
                         {compareMode && (
                           <div className="text-right text-xs">
-                            <span className="text-[#72778A] block text-[10px]">
+                            <span className="text-[#72778A] block text-xs">
                               {language === 'mn' ? 'Суурь' : 'Base'}: {originalScore}
                             </span>
                             <span
                               className={`font-bold ${
-                                delta > 0 ? 'text-[#FF633C]' : delta < 0 ? 'text-[#12B89A]' : 'text-slate-400'
+                                delta > 0 ? 'text-[#FF633C]' : delta < 0 ? 'text-[#12B89A]' : 'text-[#5C6275]'
                               }`}
                             >
                               {delta > 0 ? `+${delta}` : delta}
@@ -445,8 +445,9 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
                         {onNavigateToMapWithDistrict && (
                           <button
                             onClick={() => onNavigateToMapWithDistrict(district.id)}
-                            className="p-1.5 rounded-lg bg-white border border-[#0B124D]/10 hover:bg-[#0B124D] hover:text-white transition-colors text-xs text-[#0B124D]"
+                            className="w-11 h-11 rounded-lg bg-white border border-[#0B124D]/10 hover:bg-[#0B124D] hover:text-white transition-colors text-xs text-[#0B124D] flex items-center justify-center"
                             title={language === 'mn' ? 'Зураг дээр харах' : 'View on map'}
+                            aria-label={`${language === 'mn' ? 'Зураг дээр харах' : 'View on map'}: ${language === 'mn' ? district.nameMn : district.nameEn}`}
                           >
                             🗺️
                           </button>
@@ -481,7 +482,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
               <button
                 onClick={() => setShowMethodologyModal(false)}
                 aria-label={language === 'mn' ? 'Хаах' : 'Close'}
-                className="w-8 h-8 rounded-full bg-[#F7F8FA] hover:bg-slate-200 flex items-center justify-center text-[#72778A] font-bold"
+                className="w-11 h-11 rounded-full bg-[#F7F8FA] hover:bg-slate-200 flex items-center justify-center text-[#72778A] font-bold"
               >
                 ✕
               </button>
@@ -497,14 +498,14 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
               <div className="space-y-3 pt-2">
                 {RISK_VARIABLES_METADATA.map((m) => (
                   <div key={m.code} className="p-3 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-bold text-[#0B124D] mb-1">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-[#0B124D] mb-1">
                       <span>{m.code} · {language === 'mn' ? m.nameMn : m.nameEn}</span>
                       <span>{m.weightPercent}% {language === 'mn' ? 'жин' : 'weight'}</span>
                     </div>
-                    <code className="block bg-white p-1.5 rounded font-mono text-[10px] text-[#FF633C] mb-1 border border-[#0B124D]/5">
+                    <code className="block bg-white p-1.5 rounded font-mono text-xs text-[#FF633C] mb-1 border border-[#0B124D]/5">
                       {m.normalizationFormula}
                     </code>
-                    <p className="text-[11px]">
+                    <p className="text-xs">
                       {language === 'mn' ? m.descriptionMn : m.descriptionEn}
                     </p>
                   </div>
@@ -515,7 +516,7 @@ export const RiskExplorer: React.FC<RiskExplorerProps> = ({
             <div className="mt-6 pt-4 border-t border-[#0B124D]/10 flex justify-end">
               <button
                 onClick={() => setShowMethodologyModal(false)}
-                className="px-5 py-2 bg-[#0B124D] text-white rounded-xl text-xs font-bold"
+                className="px-5 py-2.5 min-h-[44px] bg-[#0B124D] text-white rounded-xl text-xs font-bold"
               >
                 {language === 'mn' ? 'Хаах' : 'Close'}
               </button>

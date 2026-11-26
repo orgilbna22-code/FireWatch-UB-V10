@@ -3,6 +3,7 @@ import { Language, MonthRiskData } from '../../types';
 import { MONTH_RISK_CALENDAR } from '../../data/ubGeoData';
 import { getTranslation } from '../../i18n/translations';
 import { unitKmPerHour } from '../../i18n/labels';
+import { getUbMonthIndex } from '../../utils/ubTime';
 
 interface RiskCalendarProps {
   language: Language;
@@ -10,7 +11,7 @@ interface RiskCalendarProps {
 
 export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
   const t = getTranslation(language);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(() => new Date().getMonth());
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(() => getUbMonthIndex());
 
   const activeMonth: MonthRiskData = MONTH_RISK_CALENDAR[selectedMonthIndex];
 
@@ -53,11 +54,11 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                  <span className="text-[11px] sm:text-xs font-mono font-bold truncate">
+                  <span className="text-xs sm:text-xs font-mono font-bold truncate">
                     {language === 'mn' ? m.shortMn : m.shortEn}
                   </span>
                   <span
-                    className={`text-[9px] sm:text-[10px] font-mono font-bold px-1 sm:px-1.5 py-0.5 rounded shrink-0 ml-1 ${
+                    className={`text-xs sm:text-xs font-mono font-bold px-1 sm:px-1.5 py-0.5 rounded shrink-0 ml-1 ${
                       isSelected
                         ? 'bg-white/20 text-white'
                         : isVeryHigh
@@ -71,7 +72,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                   </span>
                 </div>
 
-                <div className="text-[11px] font-mono text-slate-400 block mb-1">
+                <div className="text-xs font-mono text-slate-400 block mb-1">
                   {m.avgTempCelsius > 0 ? `+${m.avgTempCelsius}` : m.avgTempCelsius}°C
                 </div>
 
@@ -99,7 +100,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
           <div className="lg:col-span-8 bg-white p-6 sm:p-8 rounded-2xl border border-[#0B124D]/8 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#0B124D]/8">
               <div>
-                <span className="text-[11px] font-mono text-[#72778A] uppercase tracking-wider block mb-1">
+                <span className="text-xs font-mono text-[#72778A] uppercase tracking-wider block mb-1">
                   {language === 'mn' ? 'Сонгосон сар' : 'Selected Month Analysis'}
                 </span>
                 <h2 className="font-editorial text-3xl font-bold text-[#0B124D]">
@@ -108,7 +109,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
               </div>
 
               <div className="text-left sm:text-right">
-                <span className="text-[10px] font-mono text-[#72778A] uppercase block">
+                <span className="text-xs font-mono text-[#72778A] uppercase block">
                   {language === 'mn' ? 'ЭРСДЭЛИЙН АНАЛИТИК ҮЗҮҮЛЭЛТ' : 'SEASONAL RISK INDICATOR'}
                 </span>
                 <div className="flex items-baseline gap-2">
@@ -143,7 +144,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                  <span className="text-[10px] text-[#72778A] block mb-1">
+                  <span className="text-xs text-[#72778A] block mb-1">
                     {language === 'mn' ? 'Дундаж температур' : 'Avg Temperature'}
                   </span>
                   <span className="font-mono text-xl font-bold text-[#0B124D]">
@@ -152,7 +153,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                 </div>
 
                 <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                  <span className="text-[10px] text-[#72778A] block mb-1">
+                  <span className="text-xs text-[#72778A] block mb-1">
                     {language === 'mn' ? 'Агаарын харьцангуй чийгшил' : 'Relative Humidity'}
                   </span>
                   <span className="font-mono text-xl font-bold text-[#0B124D]">
@@ -161,7 +162,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                 </div>
 
                 <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#0B124D]/5">
-                  <span className="text-[10px] text-[#72778A] block mb-1">
+                  <span className="text-xs text-[#72778A] block mb-1">
                     {language === 'mn' ? 'Салхины дундаж хурд' : 'Wind Velocity'}
                   </span>
                   <span className="font-mono text-xl font-bold text-[#0B124D]">
@@ -199,7 +200,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
           {/* Right Column: Provenance & Methodology Badge (4 cols) */}
           <div className="lg:col-span-4 space-y-6">
             <div className="bg-[#0B124D] text-white p-6 sm:p-8 rounded-2xl shadow-xs space-y-4">
-              <span className="text-[10px] font-mono text-[#FF633C] uppercase tracking-widest font-bold block">
+              <span className="text-xs font-mono text-[#FF633C] uppercase tracking-widest font-bold block">
                 {language === 'mn' ? 'ӨГӨГДЛИЙН АНГИЛАЛ' : 'DATA TYPE DISTINCTION'}
               </span>
 
@@ -208,7 +209,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                   <span className="font-bold text-white block mb-0.5">
                     ● {language === 'mn' ? 'Түүхэн өгөгдөл' : 'Historical Data'}
                   </span>
-                  <p className="text-white/70 text-[11px]">
+                  <p className="text-white/70 text-xs">
                     {language === 'mn'
                       ? 'Өнгөрсөн 3-5 жилийн ЦУОШГ болон онцгой байдлын нэгтгэсэн бүртгэл.'
                       : 'Aggregated from multi-year NEMA logs and national meteorological records.'}
@@ -219,7 +220,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                   <span className="font-bold text-[#FF633C] block mb-0.5">
                     ● {language === 'mn' ? 'Загварчилсан тооцоолол' : 'Modelled / Estimated'}
                   </span>
-                  <p className="text-white/70 text-[11px]">
+                  <p className="text-white/70 text-xs">
                     {language === 'mn'
                       ? 'Хүйтний оргил ба хуурайшилтын өдрүүдийн эрсдэлийг тооцоолсон аналитик матриц.'
                       : 'Derived from multi-variable normalization formulas and historical seasonal curves.'}
@@ -230,7 +231,7 @@ export const RiskCalendar: React.FC<RiskCalendarProps> = ({ language }) => {
                   <span className="font-bold text-[#12B89A] block mb-0.5">
                     ● {language === 'mn' ? 'Бодит цагийн тандалт' : 'Current Weather Input'}
                   </span>
-                  <p className="text-white/70 text-[11px]">
+                  <p className="text-white/70 text-xs">
                     {language === 'mn'
                       ? 'Одоогийн салхи, чийгшлийн нөхцөлтэй динамикаар холбогдоно.'
                       : 'Live weather sensor integration adjusts real-time deviations.'}

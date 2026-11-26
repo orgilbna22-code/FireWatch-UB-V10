@@ -55,3 +55,17 @@ export const stationCodeLabel = (code: string, isMn: boolean) => {
   const num = code.match(/^(\d+)-р анги$/);
   return num ? `Company ${num[1]}` : code;
 };
+
+const LOCATION_CONFIDENCE: Record<'verified_address' | 'district_centroid' | 'synthetic_offset', { mn: string; en: string }> = {
+  verified_address: { mn: 'Баталгаажсан хаяг', en: 'Verified address' },
+  district_centroid: { mn: 'Дүүргийн төв цэг (ойролцоо)', en: 'District centroid (approx.)' },
+  synthetic_offset: { mn: 'Загварчилсан цэг (дүүргийн хязгаарт)', en: 'Synthetic offset (district-clamped)' },
+};
+
+export const locationConfidenceLabel = (
+  confidence: 'verified_address' | 'district_centroid' | 'synthetic_offset' | undefined,
+  isMn: boolean
+) => {
+  const item = LOCATION_CONFIDENCE[confidence ?? 'district_centroid'];
+  return isMn ? item.mn : item.en;
+};

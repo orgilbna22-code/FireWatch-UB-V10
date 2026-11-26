@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useMemo, useState } from 'react';
 import { ActiveTab, Language, RiskLevel } from '../../types';
 import { getTranslation } from '../../i18n/translations';
-import { MONTH_RISK_CALENDAR, TOTAL_HISTORICAL_INCIDENTS } from '../../data/ubGeoData';
+import { MONTH_RISK_CALENDAR, TOTAL_HISTORICAL_INCIDENTS, UB_DISTRICTS } from '../../data/ubGeoData';
 import { useLiveWeather } from '../../hooks/liveWeather';
 import { FireAnimation } from '../common/FireAnimation';
-import { AmbientFireBackground } from '../common/AmbientFireBackground';
 import { CitizenRiskLookup } from '../citizen/CitizenRiskLookup';
 import { AUDIENCE_PROFILES, AudienceRole } from '../../utils/audienceSession';
+import { getUbMonthIndex } from '../../utils/ubTime';
+import { shouldReduceMotionOrData } from '../../utils/motionBudget';
+
+const AmbientFireBackground = lazy(() =>
+  import('../common/AmbientFireBackground').then((m) => ({ default: m.AmbientFireBackground }))
+);
 
 interface LandingHeroProps {
   language: Language;
@@ -32,7 +37,13 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
   const currentProfile = AUDIENCE_PROFILES[audience];
   const live = useLiveWeather();
   const [activeSolutionIdx, setActiveSolutionIdx] = useState<number>(0);
-  const [phoneMonthIdx, setPhoneMonthIdx] = useState<number>(() => new Date().getMonth());
+  const [phoneMonthIdx, setPhoneMonthIdx] = useState<number>(() => getUbMonthIndex());
+  const lowPowerMode = shouldReduceMotionOrData();
+
+  const topWatchDistricts = useMemo(
+    () => [...UB_DISTRICTS].sort((a, b) => b.riskScore - a.riskScore).slice(0, 3),
+    []
+  );
 
   const solutions = [
     {
@@ -88,132 +99,316 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
   const weekText = WEEK_LEVEL_TEXT[selectedMonth.riskLevel] ?? WEEK_LEVEL_TEXT.moderate;
 
   return (
-    <div className="w-full bg-[#F7F8FA]">
+    <div className="w-full bg-transparent">
       <div className="max-w-[1440px] mx-auto px-3 sm:px-6 pt-3 sm:pt-5 pb-6 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         
         {/* ========================================================= */}
-        {/* LEFT PANEL: Deep Navy Sculpted Card with Live Fire        */}
+        {/* LEFT COLUMN: Deep Navy Sculpted Card + Telemetry Stack    */}
         {/* ========================================================= */}
-        <div
-          className="lg:col-span-5 lg:sticky lg:top-20 lg:self-start text-white p-5 sm:p-7 lg:p-8 flex flex-col justify-between relative overflow-hidden rounded-[28px] sm:rounded-[36px] border border-white/15 shadow-[0_24px_64px_-16px_rgba(11,18,77,0.48)]"
-          style={{
-            background: 'linear-gradient(155deg, #0B124D 0%, #0E175A 52%, #191642 100%)',
-          }}
-        >
-          
-          {/* Ambient Living Fire Thermal Background */}
-          <AmbientFireBackground intensity={1.15} />
-
-          {/* Feathered radial dot pattern (softly fades before card edges) */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
           <div
-            className="absolute inset-0 opacity-[0.045] pointer-events-none"
+            className="text-white p-5 sm:p-7 flex flex-col justify-between relative overflow-hidden rounded-[28px] sm:rounded-[36px] border border-white/15 shadow-[0_24px_64px_-16px_rgba(11,18,77,0.48)]"
             style={{
-              backgroundImage: `radial-gradient(#FFFFFF 1px, transparent 1px)`,
-              backgroundSize: '24px 24px',
-              maskImage: 'radial-gradient(ellipse at 50% 45%, black 42%, transparent 88%)',
-              WebkitMaskImage: 'radial-gradient(ellipse at 50% 45%, black 42%, transparent 88%)',
+              background: 'linear-gradient(155deg, #0B124D 0%, #0E175A 52%, #191642 100%)',
             }}
-          />
+          >
+            {/* Ambient Living Fire Thermal Background (lazy-loaded & skipped under low-data / reduced-motion) */}
+            {!lowPowerMode && (
+              <Suspense fallback={null}>
+                <AmbientFireBackground intensity={1.15} />
+              </Suspense>
+            )}
 
-          {/* Top Location Indicator (jargon-free) */}
-          <div className="flex items-center justify-between text-xs tracking-wider text-white/70 font-mono z-10">
-            <span className="uppercase font-semibold tracking-widest text-[#FF633C] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF633C] animate-pulse" />
-              {isMn ? 'УЛААНБААТАР · МОНГОЛ' : 'ULAANBAATAR · MONGOLIA'}
-            </span>
+            {/* Feathered radial dot pattern (softly fades before card edges) */}
+            <div
+              className="absolute inset-0 opacity-[0.045] pointer-events-none"
+              style={{
+                backgroundImage: `radial-gradient(#FFFFFF 1px, transparent 1px)`,
+                backgroundSize: '24px 24px',
+                maskImage: 'radial-gradient(ellipse at 50% 45%, black 42%, transparent 88%)',
+                WebkitMaskImage: 'radial-gradient(ellipse at 50% 45%, black 42%, transparent 88%)',
+              }}
+            />
+
+            {/* Top Location Indicator (jargon-free) */}
+            <div className="flex items-center justify-between text-xs tracking-wider text-white/70 font-mono z-10">
+              <span className="uppercase font-semibold tracking-widest text-[#FF633C] flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FF633C] animate-pulse" />
+                {isMn ? 'УЛААНБААТАР · МОНГОЛ' : 'ULAANBAATAR · MONGOLIA'}
+              </span>
+            </div>
+
+            {/* Core Brand & Compact Interactive Fire Emblem */}
+            <div className="my-4 z-10">
+              <div className="w-28 h-32 sm:w-36 sm:h-40 rounded-[24px] sm:rounded-[28px] bg-gradient-to-b from-white/12 to-white/5 backdrop-blur-2xl border border-white/20 flex flex-col items-center justify-center p-2.5 mb-4 shadow-[0_16px_50px_rgba(255,99,60,0.28)] relative group transition-all duration-300 mx-auto sm:mx-0">
+                <FireAnimation
+                  size="md"
+                  intensity="high"
+                  interactive={true}
+                  className="my-auto"
+                />
+                <div className="absolute inset-0 bg-radial from-[#FF633C]/25 via-transparent to-transparent rounded-[24px] sm:rounded-[28px] -z-10 group-hover:from-[#FF633C]/45 transition-colors pointer-events-none" />
+              </div>
+
+              {/* Giant Title with Apple-grade tight tracking */}
+              <h1 className="font-editorial text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.05] mb-3 text-balance">
+                FIREWATCH<br />
+                <span className="text-[#FF633C] font-mono text-2xl sm:text-3xl font-semibold">UB</span>
+              </h1>
+
+              {/* Editorial Tagline */}
+              <p className="font-editorial text-lg sm:text-xl text-white/90 leading-snug font-normal mb-4 italic text-balance">
+                “{t.tagline}”
+              </p>
+
+              {/* Direction Pill */}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-xs font-mono tracking-wide mb-4 border border-white/10 backdrop-blur-md max-w-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#12B89A] shrink-0" />
+                <span className="truncate">{t.directionPill}</span>
+              </div>
+
+              {/* Large Statistic Treatment */}
+              <div className="pt-4 border-t border-white/10">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-4xl sm:text-5xl font-bold tracking-tight text-white tabular-nums">
+                    {TOTAL_HISTORICAL_INCIDENTS.toLocaleString()}
+                  </span>
+                  <span className="text-xs font-mono text-[#FF633C] uppercase tracking-wider font-semibold">
+                    {isMn ? 'жишээ бичлэг' : 'demo records'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className="text-xs text-white/70">
+                    {isMn
+                      ? 'Жишээ шинжилгээнд хамруулсан орон зайн өгөгдөл'
+                      : 'Illustrative baseline spatial records modeled'}
+                  </p>
+                  <button
+                    onClick={onOpenDemoInfo}
+                    className="text-xs font-mono bg-white/15 hover:bg-white/25 text-white/90 px-2 py-0.5 rounded-full transition-colors whitespace-nowrap"
+                  >
+                    {t.demoMode.split('·')[0].trim()}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Left Quick Meta */}
+            <div className="z-10 mt-2 px-4 py-2.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 text-xs text-white/75 font-mono">
+              <span>Open-Meteo · 47.92°N</span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    live.status === 'live'
+                      ? 'bg-[#12B89A] animate-pulse'
+                      : live.status === 'stale'
+                      ? 'bg-amber-400'
+                      : 'bg-slate-400'
+                  }`}
+                />
+                {live.status === 'live'
+                  ? 'LIVE METEO'
+                  : live.status === 'stale'
+                  ? isMn
+                    ? 'КЭШ ЦАГ АГААР'
+                    : 'CACHED METEO'
+                  : live.status === 'loading'
+                  ? isMn
+                    ? 'ХОЛБОГДОЖ БАЙНА'
+                    : 'CONNECTING'
+                  : isMn
+                  ? 'ЦАГ АГААР ТАСАРСАН'
+                  : 'METEO OFFLINE'}
+              </span>
+            </div>
           </div>
 
-          {/* Core Brand & Compact Interactive Fire Emblem */}
-          <div className="my-4 sm:my-5 z-10">
-            
-            <div className="w-32 h-36 sm:w-40 sm:h-44 rounded-[26px] sm:rounded-[30px] bg-gradient-to-b from-white/12 to-white/5 backdrop-blur-2xl border border-white/20 flex flex-col items-center justify-center p-2.5 mb-4 sm:mb-5 shadow-[0_16px_50px_rgba(255,99,60,0.28)] relative group transition-all duration-300 mx-auto sm:mx-0">
-              <FireAnimation
-                size="md"
-                intensity="high"
-                interactive={true}
-                className="my-auto"
-              />
-              <div className="absolute inset-0 bg-radial from-[#FF633C]/25 via-transparent to-transparent rounded-[26px] sm:rounded-[30px] -z-10 group-hover:from-[#FF633C]/45 transition-colors pointer-events-none" />
+          {/* Card 1 below LIVE METEO: Live Fire-Weather Breakdown (Open-Meteo real telemetry) */}
+          <section
+            aria-label={isMn ? 'Бодит цаг агаарын галын нөхцөл' : 'Live fire-weather conditions'}
+            className="bg-white rounded-[24px] border border-black/10 dark:border-white/10 shadow-[0_18px_42px_-12px_rgba(6,10,36,0.35)] p-4 sm:p-5 space-y-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg shrink-0" aria-hidden="true">{live.symbol}</span>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#0B124D] truncate">
+                    {isMn ? 'УБ Бодит цаг агаарын нөхцөл' : 'Live UB Fire-Weather'}
+                  </h3>
+                  <p className="text-xs text-[#72778A] truncate">
+                    {live.isLive
+                      ? `Open-Meteo · ${live.lastUpdated}`
+                      : live.status === 'stale'
+                      ? isMn
+                        ? `Кэш ажиглалт · ${live.lastUpdated}`
+                        : `Cached · ${live.lastUpdated}`
+                      : isMn
+                      ? 'Улирлын суурь утга (Оффлайн)'
+                      : 'Seasonal baseline (Offline)'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectTab('weather')}
+                className="text-xs font-bold text-[#FF633C] hover:underline shrink-0"
+              >
+                {isMn ? 'Дэлгэрэнгүй →' : 'Weather →'}
+              </button>
             </div>
 
-            {/* Giant Title with Apple-grade tight tracking */}
-            <h1 className="font-editorial text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.05] mb-3 text-balance">
-              FIREWATCH<br />
-              <span className="text-[#FF633C] font-mono text-2xl sm:text-3xl font-semibold">UB</span>
-            </h1>
-
-            {/* Editorial Tagline */}
-            <p className="font-editorial text-lg sm:text-xl text-white/90 leading-snug font-normal mb-4 italic text-balance">
-              “{t.tagline}”
-            </p>
-
-            {/* Direction Pill */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-xs font-mono tracking-wide mb-5 border border-white/10 backdrop-blur-md max-w-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#12B89A] shrink-0" />
-              <span className="truncate">{t.directionPill}</span>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2.5 rounded-2xl bg-[#F7F8FA] border border-black/[0.04]">
+                <div className="text-xs text-[#72778A] font-medium">
+                  {isMn ? 'Температур' : 'Temp'}
+                </div>
+                <div className="font-mono text-base font-bold text-[#0B124D] tabular-nums mt-0.5">
+                  {live.tempCelsius}°C
+                </div>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-[#F7F8FA] border border-black/[0.04]">
+                <div className="text-xs text-[#72778A] font-medium">
+                  {isMn ? 'Чийгшил' : 'Humidity'}
+                </div>
+                <div className="font-mono text-base font-bold text-[#0B124D] tabular-nums mt-0.5">
+                  {live.humidityPercent}%
+                </div>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-[#F7F8FA] border border-black/[0.04]">
+                <div className="text-xs text-[#72778A] font-medium">
+                  {isMn ? 'Салхи' : 'Wind'}
+                </div>
+                <div className="font-mono text-base font-bold text-[#0B124D] tabular-nums mt-0.5">
+                  {live.windSpeedKmh} <span className="text-xs font-normal">{isMn ? 'км/ц' : 'km/h'}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Large Statistic Treatment */}
-            <div className="pt-4 border-t border-white/10">
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono text-4xl sm:text-5xl font-bold tracking-tight text-white tabular-nums">
-                  {TOTAL_HISTORICAL_INCIDENTS.toLocaleString()}
+            {/* Separated physics bars: Ignition vs Spread */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5C6275] font-medium">
+                    {isMn ? 'Авалцах нөхцөл' : 'Ignition index'}
+                  </span>
+                  <span className="font-mono font-bold text-[#0B124D] tabular-nums">
+                    {live.ignitionReceptivity}/100
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#FF633C] transition-all"
+                    style={{ width: `${live.ignitionReceptivity}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5C6275] font-medium">
+                    {isMn ? 'Тархах боломж' : 'Spread wind'}
+                  </span>
+                  <span className="font-mono font-bold text-[#0B124D] tabular-nums">
+                    {live.spreadPotential}/100
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#0B124D] transition-all"
+                    style={{ width: `${live.spreadPotential}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Card 2: Top Priority Demo Districts Quick Watchlist */}
+          <section
+            aria-label={isMn ? 'Жишээ загварын тэргүүлэх бүсүүд' : 'Top priority demo zones'}
+            className="bg-white rounded-[24px] border border-black/[0.06] shadow-xs p-4 sm:p-5 space-y-2.5"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#0B124D] truncate">
+                  {isMn ? 'Анхаарлын тэргүүн дүүргүүд' : 'Priority Watch Districts'}
                 </span>
-                <span className="text-xs font-mono text-[#FF633C] uppercase tracking-wider font-semibold">
-                  records
+                <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+                  DEMO
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <p className="text-xs text-white/70">
-                  {isMn
-                    ? 'Шинжилгээнд хамруулсан орон зайн дуудлагын өгөгдөл'
-                    : 'Historical spatial incident records modeled'}
-                </p>
+              <button
+                type="button"
+                onClick={onExploreMap}
+                className="text-xs font-bold text-[#0B124D] hover:text-[#FF633C] shrink-0"
+              >
+                {isMn ? 'Бүгдийг газрын зургаар →' : 'Map view →'}
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              {topWatchDistricts.map((d) => (
                 <button
-                  onClick={onOpenDemoInfo}
-                  className="text-[10px] font-mono bg-white/15 hover:bg-white/25 text-white/90 px-2 py-0.5 rounded-full transition-colors whitespace-nowrap"
+                  key={d.id}
+                  type="button"
+                  onClick={onExploreMap}
+                  className="w-full px-3 py-2 rounded-xl bg-[#F7F8FA] hover:bg-orange-50/70 border border-black/[0.04] hover:border-[#FF633C]/40 transition-all flex items-center justify-between gap-2 text-left group"
                 >
-                  {t.demoMode.split('·')[0].trim()}
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[#0B124D] group-hover:text-[#FF633C] truncate">
+                      {isMn ? `${d.nameMn} дүүрэг` : `${d.nameEn} District`}
+                    </div>
+                    <div className="text-xs text-[#72778A] truncate">
+                      {isMn
+                        ? `Гэр хороолол ${d.gerHouseholdPercent}% · Анги ~${d.nearestStationDistKm} км`
+                        : `Ger share ${d.gerHouseholdPercent}% · Unit ~${d.nearestStationDistKm} km`}
+                    </div>
+                  </div>
+                  <span
+                    className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg shrink-0 ${
+                      d.riskScore >= 75
+                        ? 'bg-red-100 text-[#E93B2F]'
+                        : 'bg-orange-100 text-[#FF633C]'
+                    }`}
+                  >
+                    {d.riskScore}/100
+                  </span>
                 </button>
-              </div>
+              ))}
             </div>
+          </section>
 
-          </div>
-
-          {/* Bottom Left Quick Meta */}
-          <div className="z-10 mt-6 px-4 py-2.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 text-xs text-white/75 font-mono">
-            <span>Ulaanbaatar · Mongolia</span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  live.status === 'live'
-                    ? 'bg-[#12B89A] animate-pulse'
-                    : live.status === 'stale'
-                    ? 'bg-amber-400'
-                    : 'bg-slate-400'
-                }`}
-              />
-              {live.status === 'live'
-                ? 'LIVE METEO'
-                : live.status === 'stale'
-                ? isMn
-                  ? 'КЭШ ЦАГ АГААР'
-                  : 'CACHED METEO'
-                : live.status === 'loading'
-                ? isMn
-                  ? 'ХОЛБОГДОЖ БАЙНА'
-                  : 'CONNECTING'
-                : isMn
-                ? 'ЦАГ АГААР ТАСАРСАН'
-                : 'METEO OFFLINE'}
-            </span>
+          {/* Card 3: Quick Emergency Dial & Safety Shortcut */}
+          <div className="rounded-[22px] bg-[#0B124D] text-white p-4 flex items-center justify-between gap-3 shadow-xs">
+            <div className="min-w-0">
+              <div className="text-xs font-mono uppercase tracking-widest text-[#FF633C] font-bold">
+                {isMn ? 'ШУУРХАЙ ДУУДЛАГА · 24/7' : 'EMERGENCY DISPATCH · 24/7'}
+              </div>
+              <p className="text-xs text-white/85 mt-0.5 truncate">
+                {isMn
+                  ? 'Гал гарсан тохиолдолд шууд залгана уу'
+                  : 'Call emergency services immediately on smoke or fire'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <a
+                href="tel:101"
+                className="px-3 py-2 rounded-xl bg-[#E93B2F] hover:bg-red-600 text-white font-mono text-xs font-extrabold transition-colors"
+              >
+                ☎ 101
+              </a>
+              <a
+                href="tel:105"
+                className="px-2.5 py-2 rounded-xl bg-white/12 hover:bg-white/20 text-white font-mono text-xs font-bold transition-colors"
+              >
+                105
+              </a>
+            </div>
           </div>
         </div>
 
         {/* ========================================================= */}
         {/* RIGHT PANEL: White Storytelling & Interactive Mockup      */}
         {/* ========================================================= */}
-        <div className="lg:col-span-7 bg-[#FFFFFF] rounded-[28px] sm:rounded-[36px] border border-black/[0.05] shadow-xs p-5 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-between overflow-hidden">
+        <div className="lg:col-span-7 bg-[#FFFFFF] rounded-[28px] sm:rounded-[36px] border border-black/10 dark:border-white/10 shadow-[0_24px_60px_-15px_rgba(6,10,36,0.42)] p-5 sm:p-8 lg:p-9 flex flex-col justify-between overflow-hidden">
           <div>
             {/* "Who are you?" Audience Selector — Primary Entry */}
             <section aria-labelledby="who-are-you-heading" className="mb-8">
@@ -247,7 +442,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-2xl" aria-hidden="true">{prof.icon}</span>
                         {selected && (
-                          <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-[#FF633C] text-white">
+                          <span className="text-xs font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-[#FF633C] text-white">
                             {isMn ? 'Сонгосон' : 'Active'}
                           </span>
                         )}
@@ -353,7 +548,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                       <div className="w-7 h-7 rounded-full bg-[#FF633C] text-white flex items-center justify-center font-mono text-xs font-bold shrink-0 shadow-xs">
                         {item.num}
                       </div>
-                      <span className="text-[11px] font-mono text-[#72778A] group-hover:text-[#0B124D]">
+                      <span className="text-xs font-mono text-[#72778A] group-hover:text-[#0B124D]">
                         {item.tag} →
                       </span>
                     </div>
@@ -381,12 +576,12 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                   
                   {/* Phone Header */}
                   <div>
-                    <div className="flex items-center justify-between text-[11px] pb-2 border-b border-slate-100">
+                    <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full bg-[#FF633C]" />
                         <span className="font-bold tracking-tight text-[#0B124D]">FIREWATCH UB</span>
                       </div>
-                      <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                      <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
                             live.status === 'live'
@@ -409,7 +604,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                     </div>
 
                     {/* Live fire-weather conditions, straight from the meteo feed */}
-                    <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-slate-500 bg-slate-50 rounded-lg px-2 py-1">
+                    <div className="mt-2 flex items-center justify-between text-xs font-mono text-slate-500 bg-slate-50 rounded-lg px-2 py-1">
                       <span>{live.symbol} {live.tempCelsius}°C</span>
                       <span>{isMn ? 'Чийгшил' : 'RH'} {live.humidityPercent}%</span>
                       <span className="text-[#FF633C] font-bold">FWI {live.fireWeatherIndex}</span>
@@ -417,14 +612,14 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
 
                     {/* Current Week Risk Indicator */}
                     <div className={`mt-2.5 sm:mt-3 p-2 sm:p-2.5 rounded-2xl border ${weekTone.box}`}>
-                      <span className={`text-[10px] font-medium block ${weekTone.note}`}>
+                      <span className={`text-xs font-medium block ${weekTone.note}`}>
                         {t.phoneBadgeWeek}
                       </span>
                       <div className="flex items-baseline justify-between mt-0.5">
                         <span className={`font-editorial text-base sm:text-lg font-bold ${weekTone.strong}`}>
                           {language === 'mn' ? weekText.mn : weekText.en}
                         </span>
-                        <span className={`font-mono text-[11px] font-bold tabular-nums ${weekTone.strong}`}>
+                        <span className={`font-mono text-xs font-bold tabular-nums ${weekTone.strong}`}>
                           {isMn ? 'эрсдэлийн индекс' : 'risk index'} {selectedMonth.riskScore}/100
                         </span>
                       </div>
@@ -432,7 +627,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
 
                     {/* 12-Month Mini Calendar Strip */}
                     <div className="mt-2.5 sm:mt-3">
-                      <span className="text-[10px] font-semibold text-slate-500 block mb-1.5">
+                      <span className="text-xs font-semibold text-slate-500 block mb-1.5">
                         {t.phoneCalendarTitle} ({isMn ? selectedMonth.nameMn : selectedMonth.nameEn})
                       </span>
                       <div className="grid grid-cols-6 gap-1">
@@ -443,7 +638,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                             <button
                               key={m.month}
                               onClick={() => setPhoneMonthIdx(i)}
-                              className={`py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-center ${
+                              className={`py-1 rounded-lg text-xs font-mono font-bold transition-all text-center ${
                                 isSel
                                   ? 'bg-[#0B124D] text-white shadow-xs'
                                   : isHigh
@@ -461,24 +656,24 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
 
                   {/* 3 Preventive Steps */}
                   <div className="mt-2.5 sm:mt-3 pt-2 border-t border-slate-100">
-                    <span className="text-[10px] font-semibold text-slate-500 block mb-1.5">
+                    <span className="text-xs font-semibold text-slate-500 block mb-1.5">
                       {t.phoneStepsTitle}
                     </span>
-                    <div className="space-y-1 text-[11px]">
+                    <div className="space-y-1 text-xs">
                       <div className="flex items-center gap-1.5 text-slate-700">
-                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-[9px] font-mono flex items-center justify-center font-bold shrink-0">
+                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-xs font-mono flex items-center justify-center font-bold shrink-0">
                           1
                         </span>
                         <span className="truncate">{t.phoneStep1}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-700">
-                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-[9px] font-mono flex items-center justify-center font-bold shrink-0">
+                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-xs font-mono flex items-center justify-center font-bold shrink-0">
                           2
                         </span>
                         <span className="truncate">{t.phoneStep2}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-700">
-                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-[9px] font-mono flex items-center justify-center font-bold shrink-0">
+                        <span className="w-3.5 h-3.5 rounded-full bg-[#FF633C] text-white text-xs font-mono flex items-center justify-center font-bold shrink-0">
                           3
                         </span>
                         <span className="truncate">{t.phoneStep3}</span>
@@ -489,7 +684,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                   {/* Mini Map preview button */}
                   <button
                     onClick={onExploreMap}
-                    className="w-full mt-2.5 sm:mt-3 py-2 text-[11px] font-bold text-center bg-[#0B124D] hover:bg-[#11166B] text-white rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                    className="w-full mt-2.5 sm:mt-3 py-2 text-xs font-bold text-center bg-[#0B124D] hover:bg-[#11166B] text-white rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95"
                   >
                     <span>{t.viewRiskMap}</span>
                     <span>→</span>

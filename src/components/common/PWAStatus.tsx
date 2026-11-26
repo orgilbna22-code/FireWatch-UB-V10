@@ -18,7 +18,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ language }) 
       <button
         type="button"
         onClick={install}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-[#FF633C] text-white text-[11px] font-mono font-bold transition-colors border border-white/15"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-[#FF633C] text-white text-xs font-mono font-bold transition-colors border border-white/15"
       >
         <Download className="w-3.5 h-3.5" aria-hidden="true" />
         {language === 'mn' ? 'Апп суулгах' : 'Install App'}
@@ -32,7 +32,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ language }) 
         <button
           type="button"
           onClick={() => setShowIOSGuide(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-mono font-bold transition-colors border border-white/15"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-mono font-bold transition-colors border border-white/15"
         >
           <Download className="w-3.5 h-3.5" aria-hidden="true" />
           {language === 'mn' ? 'iPhone дээр суулгах' : 'Install on iOS'}

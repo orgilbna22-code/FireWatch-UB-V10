@@ -70,7 +70,7 @@ export function extractOsmVectorTileData(
   const buildings: OsmBuildingPoly[] = [];
   const buildingLayer = tile.layers['building'];
   if (buildingLayer) {
-    const limit = Math.min(buildingLayer.length, 950);
+    const limit = Math.min(buildingLayer.length, 3500);
     for (let i = 0; i < limit; i++) {
       const feat = buildingLayer.feature(i);
       if (feat.type !== 3) continue; // Polygon only
@@ -138,7 +138,7 @@ export function extractOsmVectorTileData(
   const roads: OsmRoadLine[] = [];
   const transLayer = tile.layers['transportation'];
   if (transLayer) {
-    const limit = Math.min(transLayer.length, 600);
+    const limit = Math.min(transLayer.length, 1200);
     for (let i = 0; i < limit; i++) {
       const feat = transLayer.feature(i);
       if (feat.type !== 2) continue;
@@ -168,20 +168,39 @@ export function extractOsmVectorTileData(
 }
 
 // TileJSON + LRU in-memory vector tile cache (zero duplicate fetches)
+const VECTOR_FETCH_TIMEOUT_MS = 8000;
 let tileTemplatePromise: Promise<string | null> | null = null;
 const tileCache = new Map<string, Promise<OsmVectorTileData | null>>();
 const MAX_CACHED_TILES = 36;
+
+async function fetchWithTimeout(url: string, timeoutMs = VECTOR_FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { cache: 'force-cache', signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+}
 
 async function resolveTileTemplate(): Promise<string | null> {
   if (!tileTemplatePromise) {
     tileTemplatePromise = (async () => {
       try {
-        const res = await fetch('https://tiles.openfreemap.org/planet', { cache: 'force-cache' });
-        if (!res.ok) return null;
+        const res = await fetchWithTimeout('https://tiles.openfreemap.org/planet');
+        if (!res.ok) {
+          tileTemplatePromise = null;
+          return null;
+        }
         const json = (await res.json()) as { tiles?: string[] };
         const tpl = json?.tiles?.[0];
-        return typeof tpl === 'string' && tpl.includes('{z}') ? tpl : null;
+        if (typeof tpl === 'string' && tpl.includes('{z}')) {
+          return tpl;
+        }
+        tileTemplatePromise = null;
+        return null;
       } catch {
+        tileTemplatePromise = null;
         return null;
       }
     })();
@@ -211,7 +230,7 @@ export async function fetchOsmVectorTile(z: number, x: number, y: number): Promi
         .replace('{z}', String(z))
         .replace('{x}', String(x))
         .replace('{y}', String(y));
-      const res = await fetch(url, { cache: 'force-cache' });
+      const res = await fetchWithTimeout(url);
       if (!res.ok) return null;
       const buf = await res.arrayBuffer();
       const parsed = extractOsmVectorTileData(buf, x, y, z);
@@ -224,6 +243,8 @@ export async function fetchOsmVectorTile(z: number, x: number, y: number): Promi
       return parsed;
     } catch {
       return null;
+    } finally {
+      tileCache.delete(key);
     }
   })();
 

@@ -1,5 +1,9 @@
 import { DistrictData, FireStation, KhorooData } from '../types';
 import type { OsmBuildingPoly } from './osmVectorBuildings';
+import {
+  DEFAULT_TACTICAL_ASSUMPTIONS,
+  type TacticalScenarioAssumptions,
+} from '../data/tacticalScenarioConfig';
 
 export interface BuildingFootprint {
   id: string;
@@ -9,42 +13,40 @@ export interface BuildingFootprint {
   corners: [number, number][];
   /** Extruded height in screen units at reference zoom Z15 (0 = flat footprint only) */
   heightPx: number;
-  tone: 'blue_footprint' | 'slate_tower' | 'risk_red' | 'risk_amber';
-  /** Screen-space order / priority (0 = flat outline, 1 = context landmark, 2 = incident zone focal) */
+  /**
+   * Honest analytical building tones (never fabricate "burning" or "hazard" labels
+   * on unverified footprints):
+   * - blue_footprint: flat citywide GIS context outline
+   * - slate_context: subtle surrounding urban massing
+   * - slate_landmark: prominent surrounding structure
+   * - zone_focus: neutral structure inside the assumed scenario circle
+   */
+  tone: 'blue_footprint' | 'slate_context' | 'slate_landmark' | 'zone_focus';
+  /** Screen-space priority (0 = flat outline, 1 = context massing, 2 = inside scenario zone) */
   tier: number;
 }
 
-export interface DispatchRouteSegment {
-  from: [number, number];
-  to: [number, number];
-  color: '#10B981' | '#F59E0B' | '#EF4444' | '#3B82F6';
-}
-
-export interface TacticalPOI {
+export interface DispatchCorridorPoint {
   coord: [number, number];
-  kind: 'alert_amber' | 'house_red' | 'hydrant_blue' | 'flame_red';
 }
 
 export interface Tactical3DScene {
+  targetKhorooId: string;
   targetCoord: [number, number];
   targetLabelMn: string;
   targetLabelEn: string;
   targetScore: number;
-  secondaryCoord: [number, number] | null;
-  secondaryLabelMn: string;
-  secondaryLabelEn: string;
-  secondaryScore: number;
-  primaryZonePolygon: [number, number][];
-  secondaryZonePolygon: [number, number][];
+  districtId: string;
+  districtNameMn: string;
+  districtNameEn: string;
+  scenarioRadiusMeters: number;
   nearestStation: FireStation;
-  dispatchStartCoord: [number, number];
+  straightKm: number;
   distanceKm: number;
   etaMin: number;
-  dispatchSegments: DispatchRouteSegment[];
-  evacuationSegments: DispatchRouteSegment[];
-  evacuationOrigin: [number, number];
-  evacuationDistanceM: number;
-  pois: TacticalPOI[];
+  assumptions: TacticalScenarioAssumptions;
+  /** Straight/corridor indicator from real nearest station to scenario center */
+  corridorPoints: [number, number][];
   buildings: BuildingFootprint[];
 }
 
@@ -60,7 +62,34 @@ export function haversineKm(a: [number, number], b: [number, number]): number {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Deterministic PRNG so anchor footprints never jitter on re-render */
+export function clampAssumptions(
+  partial?: Partial<TacticalScenarioAssumptions>
+): TacticalScenarioAssumptions {
+  const r = Number(partial?.radiusMeters ?? DEFAULT_TACTICAL_ASSUMPTIONS.radiusMeters);
+  const detour = Number(partial?.detourFactor ?? DEFAULT_TACTICAL_ASSUMPTIONS.detourFactor);
+  const speed = Number(partial?.avgSpeedKmh ?? DEFAULT_TACTICAL_ASSUMPTIONS.avgSpeedKmh);
+  const turnout = Number(partial?.turnoutDelayMin ?? DEFAULT_TACTICAL_ASSUMPTIONS.turnoutDelayMin);
+
+  return {
+    radiusMeters: Math.max(100, Math.min(600, Math.round(Number.isFinite(r) ? r : 250))),
+    detourFactor: Math.max(1.0, Math.min(1.8, +(Number.isFinite(detour) ? detour : 1.28).toFixed(2))),
+    avgSpeedKmh: Math.max(15, Math.min(50, Math.round(Number.isFinite(speed) ? speed : 28))),
+    turnoutDelayMin: Math.max(0, Math.min(6, Math.round(Number.isFinite(turnout) ? turnout : 2))),
+  };
+}
+
+export function computeRoughDispatchEstimate(
+  straightKm: number,
+  assumptions: TacticalScenarioAssumptions = DEFAULT_TACTICAL_ASSUMPTIONS
+): { routeKm: number; etaMin: number } {
+  const safeAssumptions = clampAssumptions(assumptions);
+  const routeKm = Math.max(0.3, +(straightKm * safeAssumptions.detourFactor).toFixed(1));
+  const travelMin = (routeKm / safeAssumptions.avgSpeedKmh) * 60;
+  const etaMin = Math.max(2, Math.round(safeAssumptions.turnoutDelayMin + travelMin));
+  return { routeKm, etaMin };
+}
+
+/** Deterministic PRNG so context footprints never jitter across renders */
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -94,18 +123,10 @@ function makeRotatedRect(
   ]);
 }
 
-function expandBlockPolygon(
-  center: [number, number],
-  rLat: number,
-  rLng: number,
-  tilt = 0.08
-): [number, number][] {
-  return makeRotatedRect(center[0], center[1], rLng * 0.68, rLat, tilt);
-}
-
 export function findNearestStation(
   target: [number, number],
-  stations: FireStation[]
+  stations: FireStation[],
+  assumptions: TacticalScenarioAssumptions = DEFAULT_TACTICAL_ASSUMPTIONS
 ): { station: FireStation; straightKm: number; routeKm: number; etaMin: number } {
   let best = stations[0];
   let bestDist = Infinity;
@@ -116,58 +137,39 @@ export function findNearestStation(
       best = s;
     }
   }
-  const routeKm = Math.max(0.6, +(bestDist * 1.28).toFixed(1));
-  const etaMin = Math.max(3, Math.round(routeKm * 2.3 + 2));
+  const { routeKm, etaMin } = computeRoughDispatchEstimate(bestDist, assumptions);
   return { station: best, straightKm: bestDist, routeKm, etaMin };
 }
 
 /**
- * Generates clean urban-grid arterial segments from foreground entry / evacuation origin to incident target
- * matching Image 3's green -> amber -> red fire response corridor & blue responder path.
+ * Generates an honest straight-line-plus-detour schematic corridor between
+ * the nearest station and the selected scenario center (explicitly labelled
+ * in UI as a rough directional line, not live turn-by-turn street navigation).
  */
-function buildStreetAlignedRoute(
+export function buildCorridorArc(
   from: [number, number],
-  to: [number, number],
-  isDispatch: boolean
-): DispatchRouteSegment[] {
+  to: [number, number]
+): [number, number][] {
+  const midLat = (from[0] + to[0]) * 0.5;
+  const midLng = (from[1] + to[1]) * 0.5;
   const dLat = to[0] - from[0];
   const dLng = to[1] - from[1];
-
-  const pts: [number, number][] = isDispatch
-    ? [
-        from,
-        [from[0] + dLat * 0.08, from[1] + dLng * 0.28],
-        [from[0] + dLat * 0.45, from[1] + dLng * 0.36],
-        [from[0] + dLat * 0.50, from[1] + dLng * 0.72],
-        [from[0] + dLat * 0.82, from[1] + dLng * 0.80],
-        to,
-      ]
-    : [
-        from,
-        [from[0] - dLat * 0.10, from[1] + dLng * 0.26],
-        [from[0] + dLat * 0.26, from[1] + dLng * 0.36],
-        [from[0] + dLat * 0.48, from[1] + dLng * 0.64],
-        [from[0] + dLat * 0.72, from[1] + dLng * 0.82],
-        to,
-      ];
-
-  const dispatchColors: Array<'#10B981' | '#F59E0B' | '#EF4444'> = [
-    '#10B981',
-    '#10B981',
-    '#10B981',
-    '#F59E0B',
-    '#EF4444',
+  // Gentle orthographic bow toward the arterial center without inventing fake street turns
+  const ctrl: [number, number] = [
+    midLat - dLng * 0.04,
+    midLng + dLat * 0.06,
   ];
-
-  const segs: DispatchRouteSegment[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    segs.push({
-      from: pts[i],
-      to: pts[i + 1],
-      color: isDispatch ? dispatchColors[i] : '#3B82F6',
-    });
+  const pts: [number, number][] = [];
+  const steps = 12;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const inv = 1 - t;
+    pts.push([
+      inv * inv * from[0] + 2 * inv * t * ctrl[0] + t * t * to[0],
+      inv * inv * from[1] + 2 * inv * t * ctrl[1] + t * t * to[1],
+    ]);
   }
-  return segs;
+  return pts;
 }
 
 export function generateCityBlueFootprints(khoroos: KhorooData[]): BuildingFootprint[] {
@@ -204,7 +206,7 @@ function shortKhorooTitle(name: string): string {
   if (paren && paren[1]) {
     const firstTag = paren[1].split(',')[0].trim();
     const combined = `${cleaned} · ${firstTag}`;
-    return combined.length <= 22 ? combined : cleaned;
+    return combined.length <= 24 ? combined : cleaned;
   }
   return cleaned;
 }
@@ -215,8 +217,10 @@ export function buildTactical3DScene(params: {
   khoroos: KhorooData[];
   stations: FireStation[];
   baseFootprints: BuildingFootprint[];
+  assumptions?: Partial<TacticalScenarioAssumptions>;
 }): Tactical3DScene {
   const { activeDistrict, selectedKhoroo, khoroos, stations, baseFootprints } = params;
+  const assumptions = clampAssumptions(params.assumptions);
 
   const districtKhoroos = activeDistrict
     ? khoroos
@@ -226,189 +230,72 @@ export function buildTactical3DScene(params: {
 
   const primaryKhoroo = selectedKhoroo ?? districtKhoroos[0] ?? khoroos[0];
   const targetCoord = primaryKhoroo.center;
-
-  const nearbyCandidate = districtKhoroos.find(
-    (k) =>
-      k.id !== primaryKhoroo.id &&
-      haversineKm(k.center, targetCoord) >= 0.55 &&
-      haversineKm(k.center, targetCoord) <= 1.25
-  );
-  const secondaryKhoroo =
-    nearbyCandidate ?? districtKhoroos.find((k) => k.id !== primaryKhoroo.id) ?? null;
-
-  const secondaryCoord: [number, number] | null = secondaryKhoroo
-    ? haversineKm(secondaryKhoroo.center, targetCoord) <= 0.95
-      ? secondaryKhoroo.center
-      : [targetCoord[0] + 0.0014, targetCoord[1] + 0.0052]
-    : null;
-
-  const nearest = findNearestStation(targetCoord, stations);
-
-  const stationStraight = haversineKm(nearest.station.coordinates, targetCoord);
-  const dispatchStartCoord: [number, number] =
-    stationStraight <= 1.05
-      ? nearest.station.coordinates
-      : [targetCoord[0] - 0.0029, targetCoord[1] + 0.0068];
-
-  const dispatchSegments = buildStreetAlignedRoute(dispatchStartCoord, targetCoord, true);
-
-  const evacuationOrigin: [number, number] = [
-    targetCoord[0] + 0.0033,
-    targetCoord[1] - 0.0044,
-  ];
-  const evacuationSegments = buildStreetAlignedRoute(evacuationOrigin, targetCoord, false);
-  const evacuationDistanceM = Math.round(haversineKm(evacuationOrigin, targetCoord) * 1000);
-
-  // Clean, uncluttered scene: NO 450-cube checkerboard spam grid!
-  // Base contains subtle city footprints plus ONLY 8-9 clean architectural focal structures
-  // inside the primary incident and secondary alert zones (enhanced dynamically with real OSM polygons when loaded).
-  const sceneBuildings: BuildingFootprint[] = [...baseFootprints];
-  const streetAngle = 0.08;
-
-  // Primary High-Risk Focal Red Cluster (3 clean spaced translucent holographic structures around the hazard pad — zero overlap with center fire beacon or POI pins)
-  const redCenter: [number, number] = [targetCoord[0] - 0.00015, targetCoord[1] - 0.00145];
-  const redOffsets: [number, number, number, number, number, BuildingFootprint['tone']][] = [
-    [0.00046, -0.00072, 0.00028, 0.00020, 56, 'risk_red'],
-    [-0.00018, -0.00118, 0.00026, 0.00020, 38, 'slate_tower'],
-    [-0.00048, -0.00022, 0.00024, 0.00018, 30, 'risk_red'],
-  ];
-  redOffsets.forEach(([dLat, dLng, hw, hh, h, tone], i) => {
-    const c: [number, number] = [redCenter[0] + dLat, redCenter[1] + dLng];
-    sceneBuildings.push({
-      id: `cluster-red-${i}`,
-      center: c,
-      corners: makeRotatedRect(c[0], c[1], hw, hh, streetAngle),
-      heightPx: h,
-      tone,
-      tier: 2,
-    });
-  });
-
-  // Secondary Elevated Cluster (3 clean translucent glass volumes on upper-right warning pad)
-  if (secondaryCoord) {
-    const secOffsets: [number, number, number, number, number, BuildingFootprint['tone']][] = [
-      [0.00038, -0.00052, 0.00026, 0.00020, 48, 'risk_red'],
-      [-0.00022, 0.00046, 0.00026, 0.00019, 34, 'risk_amber'],
-      [0.00034, 0.00056, 0.00024, 0.00018, 36, 'slate_tower'],
-    ];
-    secOffsets.forEach(([dLat, dLng, hw, hh, h, tone], i) => {
-      const c: [number, number] = [secondaryCoord[0] + dLat, secondaryCoord[1] + dLng];
-      sceneBuildings.push({
-        id: `cluster-sec-${i}`,
-        center: c,
-        corners: makeRotatedRect(c[0], c[1], hw, hh, streetAngle),
-        heightPx: h,
-        tone,
-        tier: 2,
-      });
-    });
-  }
-
-  const pois: TacticalPOI[] = [
-    { coord: [redCenter[0] - 0.00072, redCenter[1] - 0.00185], kind: 'alert_amber' },
-    { coord: [redCenter[0] - 0.00088, redCenter[1] + 0.00055], kind: 'house_red' },
-    ...(secondaryCoord
-      ? ([{ coord: [secondaryCoord[0] - 0.00068, secondaryCoord[1] - 0.00075], kind: 'alert_amber' }] as TacticalPOI[])
-      : []),
-    { coord: [targetCoord[0] - 0.00225, targetCoord[1] - 0.00055], kind: 'hydrant_blue' },
-  ];
+  const nearest = findNearestStation(targetCoord, stations, assumptions);
+  const corridorPoints = buildCorridorArc(nearest.station.coordinates, targetCoord);
 
   return {
+    targetKhorooId: primaryKhoroo.id,
     targetCoord,
     targetLabelMn: shortKhorooTitle(primaryKhoroo.nameMn),
     targetLabelEn: shortKhorooTitle(primaryKhoroo.nameEn),
     targetScore: primaryKhoroo.riskScore,
-    secondaryCoord,
-    secondaryLabelMn: secondaryKhoroo ? shortKhorooTitle(secondaryKhoroo.nameMn) : '',
-    secondaryLabelEn: secondaryKhoroo ? shortKhorooTitle(secondaryKhoroo.nameEn) : '',
-    secondaryScore: secondaryKhoroo ? secondaryKhoroo.riskScore : 0,
-    primaryZonePolygon: expandBlockPolygon(redCenter, 0.0011, 0.0022, streetAngle),
-    secondaryZonePolygon: secondaryCoord
-      ? expandBlockPolygon(secondaryCoord, 0.00095, 0.0019, streetAngle)
-      : [],
+    districtId: activeDistrict?.id ?? primaryKhoroo.districtId,
+    districtNameMn: activeDistrict?.nameMn ?? '',
+    districtNameEn: activeDistrict?.nameEn ?? '',
+    scenarioRadiusMeters: assumptions.radiusMeters,
     nearestStation: nearest.station,
-    dispatchStartCoord,
+    straightKm: nearest.straightKm,
     distanceKm: nearest.routeKm,
     etaMin: nearest.etaMin,
-    dispatchSegments,
-    evacuationSegments,
-    evacuationOrigin,
-    evacuationDistanceM,
-    pois,
-    buildings: sceneBuildings,
+    assumptions,
+    corridorPoints,
+    buildings: baseFootprints,
   };
 }
 
 /**
- * Combines real OpenStreetMap building footprints cleanly with the tactical focal clusters:
- * - Promotes ONLY real buildings inside the Primary Red Zone, Secondary Amber Zone, and up to
- *   `maxContextExtrusions` largest surrounding landmark footprints to clean 3D translucent blocks.
- * - Keeps all other real buildings as crisp flat cobalt-blue GIS footprints (never overcrowding the screen).
+ * Selects real OpenStreetMap building footprints cleanly without inventing
+ * "red danger houses" or fake attributes:
+ * - Structures inside the user's Assumed Scenario Radius get neutral focal slate/cyan tone (`zone_focus`)
+ * - Up to `maxContextExtrusions` prominent surrounding structures get `slate_landmark` / `slate_context`
+ * - Remaining footprints stay as crisp flat GIS outlines
  */
 export function selectFocusedOsm3DBuildings(
   osmBuildings: OsmBuildingPoly[],
   scene: Tactical3DScene,
-  maxContextExtrusions = 22
+  maxContextExtrusions = 24
 ): { extruded: BuildingFootprint[]; osmOutlines: OsmBuildingPoly[]; hasRealZoneBuildings: boolean } {
   if (osmBuildings.length === 0) {
     return { extruded: [], osmOutlines: [], hasRealZoneBuildings: false };
   }
 
-  const redAnchor: [number, number] = [
-    scene.targetCoord[0] - 0.0001,
-    scene.targetCoord[1] - 0.0012,
-  ];
-  const secAnchor = scene.secondaryCoord;
+  const radiusKm = scene.scenarioRadiusMeters / 1000;
+  const contextRadiusKm = Math.max(0.55, radiusKm * 2.2);
 
-  const primaryBuildings: BuildingFootprint[] = [];
-  const secondaryBuildings: BuildingFootprint[] = [];
+  const zoneBuildings: Array<{ b: OsmBuildingPoly; dist: number }> = [];
   const contextCandidates: Array<{ b: OsmBuildingPoly; dist: number }> = [];
 
   for (let i = 0; i < osmBuildings.length; i++) {
     const b = osmBuildings[i];
-    const distPrimary = haversineKm(b.center, redAnchor);
-    const distTarget = haversineKm(b.center, scene.targetCoord);
-    const dRed = Math.min(distPrimary, distTarget);
+    const dist = haversineKm(b.center, scene.targetCoord);
 
-    if (dRed <= 0.16 && primaryBuildings.length < 9) {
-      primaryBuildings.push({
-        id: b.id,
-        center: b.center,
-        corners: b.corners,
-        heightPx: Math.max(24, b.heightPx + (primaryBuildings.length % 2 === 0 ? 12 : 4)),
-        tone: primaryBuildings.length % 3 === 1 ? 'slate_tower' : 'risk_red',
-        tier: 2,
-      });
-      continue;
-    }
-
-    if (secAnchor && secondaryBuildings.length < 7) {
-      const dSec = haversineKm(b.center, secAnchor);
-      if (dSec <= 0.14) {
-        secondaryBuildings.push({
-          id: b.id,
-          center: b.center,
-          corners: b.corners,
-          heightPx: Math.max(20, b.heightPx + 8),
-          tone:
-            secondaryBuildings.length === 0
-              ? 'risk_red'
-              : secondaryBuildings.length % 2 === 1
-              ? 'risk_amber'
-              : 'slate_tower',
-          tier: 2,
-        });
-        continue;
-      }
-    }
-
-    // Keep surrounding 3D context sparse, clean, and restricted to substantial buildings
-    if (dRed <= 0.42 && b.areaScore >= 36) {
-      contextCandidates.push({ b, dist: dRed });
+    if (dist <= radiusKm) {
+      zoneBuildings.push({ b, dist });
+    } else if (dist <= contextRadiusKm && b.areaScore >= 10) {
+      contextCandidates.push({ b, dist });
     }
   }
 
-  // Pick only top N largest / prominent surrounding landmarks (avoid dozens of tiny boxes)
+  zoneBuildings.sort((a, b) => a.dist - b.dist || b.b.areaScore - a.b.areaScore);
+  const focalExtruded: BuildingFootprint[] = zoneBuildings.slice(0, 32).map(({ b }) => ({
+    id: b.id,
+    center: b.center,
+    corners: b.corners,
+    heightPx: Math.max(16, Math.min(54, b.heightPx + 4)),
+    tone: 'zone_focus',
+    tier: 2,
+  }));
+
   contextCandidates.sort((a, b) => b.b.areaScore - a.b.areaScore);
   const contextExtruded: BuildingFootprint[] = contextCandidates
     .slice(0, maxContextExtrusions)
@@ -416,16 +303,134 @@ export function selectFocusedOsm3DBuildings(
       id: b.id,
       center: b.center,
       corners: b.corners,
-      heightPx: Math.max(14, Math.min(46, b.heightPx)),
-      tone: 'slate_tower',
+      heightPx: Math.max(12, Math.min(44, b.heightPx)),
+      tone: b.areaScore >= 160 ? 'slate_landmark' : 'slate_context',
       tier: 1,
     }));
 
-  const hasRealZoneBuildings = primaryBuildings.length >= 2;
   return {
-    extruded: [...primaryBuildings, ...secondaryBuildings, ...contextExtruded],
+    extruded: [...focalExtruded, ...contextExtruded],
     osmOutlines: osmBuildings,
-    hasRealZoneBuildings,
+    hasRealZoneBuildings: focalExtruded.length >= 1,
+  };
+}
+
+/**
+ * Signed 2D screen-space polygon area (positive = clockwise in screen Y-down coordinates).
+ * Used to determine true outward edge normals for accurate 3D wall shading.
+ */
+export function polygonSignedAreaScreen(pts: [number, number][]): number {
+  let sum = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    sum += x0 * y1 - x1 * y0;
+  }
+  return sum * 0.5;
+}
+
+/**
+ * Returns directional lighting factor [0..1] for a wall segment from p0 -> p1
+ * against a normalized upper-left sun direction.
+ */
+export function computeEdgeLitFactor(
+  p0: [number, number],
+  p1: [number, number],
+  signedArea: number
+): number {
+  const dx = p1[0] - p0[0];
+  const dy = p1[1] - p0[1];
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return 0.5;
+
+  // In screen coordinates (X right, Y down), CW polygon (signedArea > 0) has outward normal (dy, -dx).
+  const sign = signedArea >= 0 ? 1 : -1;
+  const nx = (dy * sign) / len;
+  const ny = (-dx * sign) / len;
+
+  // Light source from upper-left (-0.64, -0.77)
+  const dot = nx * -0.64 + ny * -0.77;
+  return Math.max(0, Math.min(1, (dot + 1) * 0.5));
+}
+
+export interface RectBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface SafeBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+export function resolveSafeCardPosition(
+  desiredX: number,
+  desiredY: number,
+  w: number,
+  h: number,
+  placed: RectBox[],
+  bounds: SafeBounds,
+  candidates: Array<[number, number]>
+): { x: number; y: number } {
+  const clampRect = (rx: number, ry: number): RectBox => ({
+    x: Math.max(bounds.minX, Math.min(Math.max(bounds.minX, bounds.maxX - w), rx)),
+    y: Math.max(bounds.minY, Math.min(Math.max(bounds.minY, bounds.maxY - h), ry)),
+    w,
+    h,
+  });
+
+  const overlaps = (a: RectBox, b: RectBox, pad = 6) =>
+    !(
+      a.x + a.w + pad < b.x ||
+      b.x + b.w + pad < a.x ||
+      a.y + a.h + pad < b.y ||
+      b.y + b.h + pad < a.y
+    );
+
+  for (const [dx, dy] of candidates) {
+    const rect = clampRect(desiredX + dx, desiredY + dy);
+    if (!placed.some((p) => overlaps(rect, p))) {
+      placed.push(rect);
+      return { x: rect.x, y: rect.y };
+    }
+  }
+  const fallback = clampRect(desiredX, desiredY - 36);
+  placed.push(fallback);
+  return { x: fallback.x, y: fallback.y };
+}
+
+/**
+ * Clips a segment [start -> end] into the visible rectangle [bounds] using Cohen-Sutherland / Liang-Barsky
+ * so off-screen nearest fire stations still anchor an accurate directional badge at the viewport edge.
+ */
+export function clipPointAlongRayToBounds(
+  insidePt: [number, number],
+  outsidePt: [number, number],
+  bounds: SafeBounds
+): { point: [number, number]; clipped: boolean } {
+  const [x0, y0] = insidePt;
+  const [x1, y1] = outsidePt;
+  if (x1 >= bounds.minX && x1 <= bounds.maxX && y1 >= bounds.minY && y1 <= bounds.maxY) {
+    return { point: outsidePt, clipped: false };
+  }
+
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  let tBest = 1;
+
+  if (dx < -1e-6) tBest = Math.min(tBest, (bounds.minX - x0) / dx);
+  if (dx > 1e-6) tBest = Math.min(tBest, (bounds.maxX - x0) / dx);
+  if (dy < -1e-6) tBest = Math.min(tBest, (bounds.minY - y0) / dy);
+  if (dy > 1e-6) tBest = Math.min(tBest, (bounds.maxY - y0) / dy);
+
+  tBest = Math.max(0.05, Math.min(1, tBest));
+  return {
+    point: [x0 + dx * tBest, y0 + dy * tBest],
+    clipped: true,
   };
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KhorooData, Language } from '../../types';
 import { UB_DISTRICTS, getKhoroosByDistrict, TOTAL_KHOROO_COUNT } from '../../data/ubGeoData';
 import { getTranslation } from '../../i18n/translations';
@@ -12,6 +12,105 @@ interface DistrictAnalysisProps {
   onNavigateToMapWithDistrict?: (districtId: string) => void;
 }
 
+const KhorooGridCard = React.memo<{
+  kh: KhorooData;
+  language: Language;
+  districtName: string;
+  districtId: string;
+  onInspect: (kh: KhorooData) => void;
+  onNavigateToMap?: (districtId: string) => void;
+}>(({ kh, language, districtName, districtId, onInspect, onNavigateToMap }) => {
+  const badgeClass =
+    kh.riskScore >= 75
+      ? 'bg-red-500 text-white'
+      : kh.riskScore >= 55
+      ? 'bg-[#FF633C] text-white'
+      : 'bg-[#12B89A] text-[#0B124D]';
+
+  return (
+    <div className="p-5 rounded-2xl bg-[#F7F8FA] border border-black/[0.04] hover:border-[#FF633C]/40 transition-all flex flex-col justify-between group shadow-2xs hover:shadow-md">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <span className="text-xs font-mono text-[#72778A] uppercase block">
+              {districtName} · {khorooLabel(kh.khorooNumber, language === 'mn')}
+              {kh.isModelled && (
+                <span
+                  className="ml-1 px-1 rounded bg-amber-100 text-amber-800 normal-case"
+                  title={
+                    language === 'mn'
+                      ? 'Загварчилсан үзүүлэлт ( суурь өгөгдөл дутуу )'
+                      : 'Modelled estimate — base record incomplete'
+                  }
+                >
+                  {language === 'mn' ? 'загвар' : 'model'}
+                </span>
+              )}
+            </span>
+            <h4 className="font-bold text-sm text-[#0B124D] group-hover:text-[#FF633C] transition-colors leading-snug">
+              {language === 'mn' ? kh.nameMn : kh.nameEn}
+            </h4>
+          </div>
+          <span className={`px-2 py-0.5 rounded-full font-mono text-xs font-bold shrink-0 ${badgeClass}`}>
+            {kh.riskScore} pt
+          </span>
+        </div>
+
+        <p className="text-xs text-[#72778A] leading-relaxed line-clamp-2">
+          {language === 'mn' ? kh.primaryRiskFactorMn : kh.primaryRiskFactorEn}
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-black/[0.04]">
+          <div>
+            <span className="text-[#72778A] block">
+              {language === 'mn' ? 'Өрхийн тоо:' : 'Households:'}
+            </span>
+            <b className="font-mono text-[#0B124D]">{kh.households.toLocaleString()}</b>
+          </div>
+          <div>
+            <span className="text-[#72778A] block">
+              {language === 'mn' ? 'Гэр хороолол:' : 'Ger share:'}
+            </span>
+            <b className="font-mono text-[#FF633C]">{kh.gerHouseholdPercent}%</b>
+          </div>
+          <div>
+            <span className="text-[#72778A] block">
+              {language === 'mn' ? 'Гидрант:' : 'Hydrants:'}
+            </span>
+            <b className="font-mono text-[#0B124D]">{kh.fireHydrantCount}</b>
+          </div>
+          <div>
+            <span className="text-[#72778A] block">
+              {language === 'mn' ? 'Хүрэх хугацаа:' : 'Response:'}
+            </span>
+            <b className="font-mono text-[#E93B2F]">
+              ~{kh.avgResponseTimeMin} {language === 'mn' ? 'мин' : 'min'}
+            </b>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-4 mt-2 border-t border-black/[0.04]">
+        <button
+          onClick={() => onInspect(kh)}
+          className="px-3 py-2 min-h-[44px] rounded-xl bg-white hover:bg-[#FF633C] hover:text-white border border-black/[0.08] text-xs font-bold text-[#0B124D] transition-colors flex items-center gap-1"
+        >
+          <span>📷</span>
+          <span>{language === 'mn' ? 'Бодит зураг' : 'Photo'}</span>
+        </button>
+        {onNavigateToMap && (
+          <button
+            onClick={() => onNavigateToMap(districtId)}
+            className="flex-1 py-2 min-h-[44px] rounded-xl bg-[#0B124D] hover:bg-[#11166B] text-white text-xs font-semibold text-center transition-colors shadow-xs"
+          >
+            {language === 'mn' ? 'Газрын зурагт харах' : 'View on map'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
   language,
   initialDistrictId,
@@ -24,6 +123,11 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
 
   const [khorooFilter, setKhorooFilter] = useState<'all' | 'high' | 'ger' | 'apt'>('all');
   const [inspectingKhoroo, setInspectingKhoroo] = useState<KhorooData | null>(null);
+  const [visibleKhorooCount, setVisibleKhorooCount] = useState(12);
+
+  useEffect(() => {
+    setVisibleKhorooCount(12);
+  }, [selectedDistrictId, khorooFilter]);
 
   const selectedDistrict =
     UB_DISTRICTS.find((d) => d.id === selectedDistrictId) || UB_DISTRICTS[0];
@@ -52,7 +156,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
                 ? `${UB_DISTRICTS.length} Дүүрэг • ${TOTAL_KHOROO_COUNT} Хороо`
                 : `${UB_DISTRICTS.length} Districts • ${TOTAL_KHOROO_COUNT} Khoroos`}
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono font-bold">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono font-bold">
               {language === 'mn' ? 'Жишээ суурь + 172 загварчилсан хороо' : 'Demo baselines + 172 modelled khoroos'}
             </span>
           </div>
@@ -76,7 +180,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
               <button
                 key={d.id}
                 onClick={() => setSelectedDistrictId(d.id)}
-                className={`px-4 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
+                className={`px-4 py-2 min-h-[44px] rounded-2xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
                   isSelected
                     ? 'bg-[#0B124D] text-white shadow-md scale-[1.02]'
                     : 'bg-white text-[#72778A] hover:text-[#0B124D] border border-black/[0.06] hover:border-[#0B124D]/20'
@@ -84,7 +188,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
               >
                 <span>{language === 'mn' ? d.nameMn : d.nameEn}</span>
                 <span
-                  className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
+                  className={`font-mono text-xs px-1.5 py-0.5 rounded ${
                     isSelected
                       ? 'bg-white/20 text-white'
                       : d.riskScore >= 75
@@ -111,7 +215,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-black/[0.06]">
                 <div>
-                  <span className="text-[11px] font-mono text-[#72778A] uppercase tracking-wider block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase tracking-wider block mb-1">
                     {language === 'mn' ? 'Шинжилгээний бүс' : 'Selected Target Area'}
                   </span>
                   <h2 className="font-editorial text-3xl font-bold text-[#0B124D]">
@@ -126,14 +230,14 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
                   {onNavigateToMapWithDistrict && (
                     <button
                       onClick={() => onNavigateToMapWithDistrict(selectedDistrict.id)}
-                      className="px-4 py-2 bg-[#0B124D] hover:bg-[#11166B] text-white rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                      className="px-4 py-2.5 min-h-[44px] bg-[#0B124D] hover:bg-[#11166B] text-white rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
                     >
                       <span>🗺️</span>
                       <span>{language === 'mn' ? 'Газрын зурагт харах' : 'View on Map'}</span>
                     </button>
                   )}
                   <div className="text-right pl-3 border-l border-black/[0.06]">
-                    <span className="text-[10px] font-mono uppercase text-[#72778A] block">
+                    <span className="text-xs font-mono uppercase text-[#72778A] block">
                       {language === 'mn' ? 'ЭРСДЭЛИЙН ИНДЕКС' : 'RISK INDEX'}
                     </span>
                     <span className={`font-mono text-3xl font-bold ${
@@ -151,7 +255,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
               {/* District Demographic & Infrastructure Overview */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6 border-b border-black/[0.06]">
                 <div>
-                  <span className="text-[10px] font-mono text-[#72778A] uppercase block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase block mb-1">
                     {language === 'mn' ? 'Хүн ам' : 'Population'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#0B124D]">
@@ -159,7 +263,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-mono text-[#72778A] uppercase block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase block mb-1">
                     {language === 'mn' ? 'Газар нутаг' : 'Area Size'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#0B124D]">
@@ -167,7 +271,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-mono text-[#72778A] uppercase block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase block mb-1">
                     {language === 'mn' ? 'Гэр хороолол' : 'Ger Households'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#FF633C]">
@@ -175,7 +279,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-mono text-[#72778A] uppercase block mb-1">
+                  <span className="text-xs font-mono text-[#72778A] uppercase block mb-1">
                     {language === 'mn' ? 'Түүхэн дуудлага' : 'Incidents'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#0B124D]">
@@ -186,7 +290,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
 
               {/* Neutral Analytical Key Observation */}
               <div className="pt-6">
-                <span className="text-[11px] font-mono uppercase tracking-wider text-[#72778A] block mb-2 font-semibold">
+                <span className="text-xs font-mono uppercase tracking-wider text-[#72778A] block mb-2 font-semibold">
                   {language === 'mn' ? 'Орон зайн шинжилгээний дүгнэлт' : 'Spatial Synthesis & Field Notes'}
                 </span>
                 <p className="text-sm text-[#12152A]/85 leading-relaxed bg-[#F7F8FA] p-4 rounded-2xl border border-black/[0.04]">
@@ -199,7 +303,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
 
             {/* Contributing Multi-Factor Breakdown */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.06] shadow-xs space-y-4">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-[#72778A] block font-semibold">
+              <span className="text-xs font-mono uppercase tracking-wider text-[#72778A] block font-semibold">
                 {language === 'mn' ? 'НӨЛӨӨЛӨГЧ ХҮЧИН ЗҮЙЛСИЙН ЭЗЛЭХ ХУВЬ' : 'CONTRIBUTING FACTOR WEIGHTS'}
               </span>
 
@@ -252,7 +356,7 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
             
             {/* Fire Station & Response Card */}
             <div className="bg-white p-6 rounded-3xl border border-black/[0.06] shadow-xs space-y-4">
-              <span className="text-[10px] font-mono text-[#72778A] uppercase tracking-wider block">
+              <span className="text-xs font-mono text-[#72778A] uppercase tracking-wider block">
                 {language === 'mn' ? 'ОНЦГОЙ БАЙДЛЫН ДЭД БҮТЭЦ' : 'EMERGENCY INFRASTRUCTURE'}
               </span>
 
@@ -296,13 +400,13 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
 
             {/* Practical District Advisory */}
             <div className="bg-[#0B124D] text-white p-6 rounded-3xl shadow-xs">
-              <span className="text-[10px] font-mono text-[#FF633C] uppercase tracking-wider block mb-1">
+              <span className="text-xs font-mono text-[#FF633C] uppercase tracking-wider block mb-1">
                 {language === 'mn' ? 'БҮСЭД ТОХИРСОН ЗӨВЛӨМЖ' : 'ZONAL PREVENTIVE GUIDELINES'}
               </span>
               <h4 className="font-editorial text-lg font-bold mb-3">
                 {language === 'mn' ? 'Урьдчилан сэргийлэх арга хэмжээ' : 'Targeted Risk Mitigation'}
               </h4>
-              <ul className="text-xs text-white/80 space-y-2 leading-relaxed">
+              <ul className="text-xs text-white/85 space-y-2 leading-relaxed">
                 <li className="flex items-start gap-2">
                   <span className="text-[#FF633C] font-bold">•</span>
                   <span>
@@ -341,10 +445,10 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.06]">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold">
+                <span className="text-xs font-mono uppercase tracking-widest text-[#FF633C] font-bold">
                   {language === 'mn' ? 'ДООД ТҮВШИН: ХОРООД' : 'SUB-DISTRICT DRILL-DOWN'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-slate-100 font-mono text-[10px] text-[#0B124D]">
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 font-mono text-xs text-[#0B124D]">
                   {language === 'mn'
                     ? `${filteredKhoroos.length} хороо харуулав`
                     : `${filteredKhoroos.length} khoroos shown`}
@@ -402,104 +506,33 @@ export const DistrictAnalysis: React.FC<DistrictAnalysisProps> = ({
             </div>
           </div>
 
-          {/* Khoroo Cards Grid */}
+          {/* Khoroo Cards Grid (incremental windowing to bound main-thread DOM work) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredKhoroos.map((kh) => {
-              const badgeClass =
-                kh.riskScore >= 75 ? 'bg-red-500 text-white' :
-                kh.riskScore >= 55 ? 'bg-[#FF633C] text-white' :
-                'bg-[#12B89A] text-[#0B124D]';
-
-              return (
-                <div
-                  key={kh.id}
-                  className="p-5 rounded-2xl bg-[#F7F8FA] border border-black/[0.04] hover:border-[#FF633C]/40 transition-all flex flex-col justify-between group shadow-2xs hover:shadow-md"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-mono text-[#72778A] uppercase block">
-                          {language === 'mn' ? selectedDistrict.nameMn : selectedDistrict.nameEn} ·{' '}
-                          {khorooLabel(kh.khorooNumber, language === 'mn')}
-                          {kh.isModelled && (
-                            <span
-                              className="ml-1 px-1 rounded bg-amber-100 text-amber-800 normal-case"
-                              title={
-                                language === 'mn'
-                                  ? 'Загварчилсан үзүүлэлт ( суурь өгөгдөл дутуу )'
-                                  : 'Modelled estimate — base record incomplete'
-                              }
-                            >
-                              {language === 'mn' ? 'загвар' : 'model'}
-                            </span>
-                          )}
-                        </span>
-                        <h4 className="font-bold text-sm text-[#0B124D] group-hover:text-[#FF633C] transition-colors leading-snug">
-                          {language === 'mn' ? kh.nameMn : kh.nameEn}
-                        </h4>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full font-mono text-xs font-bold shrink-0 ${badgeClass}`}>
-                        {kh.riskScore} pt
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-[#72778A] leading-relaxed line-clamp-2">
-                      {language === 'mn' ? kh.primaryRiskFactorMn : kh.primaryRiskFactorEn}
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-black/[0.04]">
-                      <div>
-                        <span className="text-[#72778A] block">
-                          {language === 'mn' ? 'Өрхийн тоо:' : 'Households:'}
-                        </span>
-                        <b className="font-mono text-[#0B124D]">
-                          {kh.households.toLocaleString()}
-                        </b>
-                      </div>
-                      <div>
-                        <span className="text-[#72778A] block">
-                          {language === 'mn' ? 'Гэр хороолол:' : 'Ger share:'}
-                        </span>
-                        <b className="font-mono text-[#FF633C]">{kh.gerHouseholdPercent}%</b>
-                      </div>
-                      <div>
-                        <span className="text-[#72778A] block">
-                          {language === 'mn' ? 'Гидрант:' : 'Hydrants:'}
-                        </span>
-                        <b className="font-mono text-[#0B124D]">{kh.fireHydrantCount}</b>
-                      </div>
-                      <div>
-                        <span className="text-[#72778A] block">
-                          {language === 'mn' ? 'Хүрэх хугацаа:' : 'Response:'}
-                        </span>
-                        <b className="font-mono text-[#E93B2F]">
-                          ~{kh.avgResponseTimeMin} {language === 'mn' ? 'мин' : 'min'}
-                        </b>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-4 mt-2 border-t border-black/[0.04]">
-                    <button
-                      onClick={() => setInspectingKhoroo(kh)}
-                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FF633C] hover:text-white border border-black/[0.08] text-[11px] font-bold text-[#0B124D] transition-colors flex items-center gap-1"
-                    >
-                      <span>📷</span>
-                      <span>{language === 'mn' ? 'Бодит зураг' : 'Photo'}</span>
-                    </button>
-                    {onNavigateToMapWithDistrict && (
-                      <button
-                        onClick={() => onNavigateToMapWithDistrict(selectedDistrict.id)}
-                        className="flex-1 py-1.5 rounded-xl bg-[#0B124D] hover:bg-[#11166B] text-white text-[11px] font-semibold text-center transition-colors shadow-xs"
-                      >
-                        {language === 'mn' ? 'Газрын зурагт харах' : 'View on map'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {filteredKhoroos.slice(0, visibleKhorooCount).map((kh) => (
+              <KhorooGridCard
+                key={kh.id}
+                kh={kh}
+                language={language}
+                districtName={language === 'mn' ? selectedDistrict.nameMn : selectedDistrict.nameEn}
+                districtId={selectedDistrict.id}
+                onInspect={setInspectingKhoroo}
+                onNavigateToMap={onNavigateToMapWithDistrict}
+              />
+            ))}
           </div>
+          {filteredKhoroos.length > visibleKhorooCount && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setVisibleKhorooCount((c) => c + 12)}
+                className="px-5 py-2.5 rounded-xl bg-[#F7F8FA] hover:bg-slate-200/70 border border-black/[0.08] text-xs font-bold text-[#0B124D] transition-colors"
+              >
+                {language === 'mn'
+                  ? `Дараагийн 12 хороог харах (${filteredKhoroos.length - visibleKhorooCount} үлдсэн)`
+                  : `Show 12 more khoroos (${filteredKhoroos.length - visibleKhorooCount} remaining)`}
+              </button>
+            </div>
+          )}
         </div>
 
       </div>

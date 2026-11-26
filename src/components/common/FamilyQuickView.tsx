@@ -199,7 +199,7 @@ export const FamilyQuickView: React.FC<FamilyQuickViewProps> = ({
             <p className={`text-xs sm:text-sm ${band.tone}/80 mt-1 max-w-md`}>
               {isMn ? band.mnAdvice : band.enAdvice}
             </p>
-            <p className={`text-[11px] font-mono ${band.tone}/70 mt-1.5`}>
+            <p className={`text-xs font-mono ${band.tone}/70 mt-1.5`}>
               {live.tempCelsius}°C · {isMn ? 'чийгшил' : 'RH'} {live.humidityPercent}% ·{' '}
               {live.windSpeedKmh} {isMn ? 'км/ц' : 'km/h'} ·{' '}
               {isMn ? 'эрсдэл' : 'risk'} {dailyScore}/100
@@ -214,7 +214,7 @@ export const FamilyQuickView: React.FC<FamilyQuickViewProps> = ({
         >
           <span className="text-2xl">🚨</span>
           <div className="text-left">
-            <span className="block text-[10px] tracking-wider uppercase text-white/80 font-mono">
+            <span className="block text-xs tracking-wider uppercase text-white/80 font-mono">
               {language === 'mn' ? 'ГАЛ ГАРВАЛ ШУУД' : 'EMERGENCY CALL'}
             </span>
             <span className="text-xl font-mono font-extrabold tracking-tight">{EMERGENCY_LABELS.fireRescueShort}</span>
@@ -273,7 +273,7 @@ export const FamilyQuickView: React.FC<FamilyQuickViewProps> = ({
                   : 'Deposit all stove embers into a sealed non-combustible metal container.'}
               </p>
             </div>
-            <span className="mt-3 text-[11px] font-semibold text-[#12B89A] block">
+            <span className="mt-3 text-xs font-semibold text-[#12B89A] block">
               {checkedItems.stove ? (isMn ? 'Шалгасан ✓' : 'Checked ✓') : (isMn ? 'Дарж шалгах' : 'Tap to check')}
             </span>
           </div>
@@ -316,7 +316,7 @@ export const FamilyQuickView: React.FC<FamilyQuickViewProps> = ({
                   : 'Unplug phone chargers and space heaters before sleeping.'}
               </p>
             </div>
-            <span className="mt-3 text-[11px] font-semibold text-[#12B89A] block">
+            <span className="mt-3 text-xs font-semibold text-[#12B89A] block">
               {checkedItems.power ? (isMn ? 'Шалгасан ✓' : 'Checked ✓') : (isMn ? 'Дарж шалгах' : 'Tap to check')}
             </span>
           </div>
@@ -359,7 +359,7 @@ export const FamilyQuickView: React.FC<FamilyQuickViewProps> = ({
                   : 'Never seal the chimney damper shut completely to prevent deadly CO accumulation.'}
               </p>
             </div>
-            <span className="mt-3 text-[11px] font-semibold text-[#12B89A] block">
+            <span className="mt-3 text-xs font-semibold text-[#12B89A] block">
               {checkedItems.chimney ? (isMn ? 'Шалгасан ✓' : 'Checked ✓') : (isMn ? 'Дарж шалгах' : 'Tap to check')}
             </span>
           </div>

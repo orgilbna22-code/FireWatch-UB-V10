@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Language } from '../../types';
 import {
   MODELLED_KHOROO_COUNT,
@@ -9,7 +9,10 @@ import {
 import { useLiveWeather } from '../../hooks/liveWeather';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useAdminToken } from '../../utils/adminSession';
-import { AdminDataGate } from './AdminDataGate';
+
+const AdminDataGate = lazy(() =>
+  import('./AdminDataGate').then((m) => ({ default: m.AdminDataGate }))
+);
 
 interface DataSourcesModalProps {
   isOpen: boolean;
@@ -118,7 +121,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[#0B124D]/10">
           <div>
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-0.5">
+            <span className="text-xs font-mono font-bold tracking-widest text-[#FF633C] uppercase block mb-0.5">
               FIREWATCH UB · GOVERNANCE
             </span>
             <h3 className="font-editorial text-2xl font-bold text-[#0B124D]">
@@ -129,7 +132,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label={language === 'mn' ? 'Хаах' : 'Close'}
-            className="w-9 h-9 rounded-full bg-[#F7F8FA] hover:bg-slate-200 text-[#72778A] hover:text-[#0B124D] flex items-center justify-center font-bold"
+            className="w-11 h-11 rounded-full bg-[#F7F8FA] hover:bg-slate-200 text-[#5C6275] hover:text-[#0B124D] flex items-center justify-center font-bold"
           >
             ✕
           </button>
@@ -198,7 +201,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
           {activeTab === 'sources' && (
             <div className="space-y-5">
               <div className="space-y-3">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#12B89A] block">
+                <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#12B89A] block">
                   {language === 'mn' ? '1. ШУУД ХОЛБОГДСОН ГАДААД ЭХ СУРВАЛЖ (LIVE)' : '1. LIVE EXTERNAL FEEDS'}
                 </span>
                 {liveFeeds.map((s, idx) => (
@@ -207,14 +210,14 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                       <span className="font-bold text-sm text-[#0B124D]">
                         {language === 'mn' ? s.nameMn : s.nameEn}
                       </span>
-                      <span className="font-mono text-[10px] font-bold text-[#0F766E] bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      <span className="font-mono text-xs font-bold text-[#0F766E] bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
                         ● {language === 'mn' ? s.badgeMn : s.badgeEn}
                       </span>
                     </div>
                     <p className="text-[#0B124D] font-medium">
                       {language === 'mn' ? s.datasetMn : s.datasetEn}
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#72778A]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#72778A]">
                       <div>
                         <b>{language === 'mn' ? 'Шинэчлэл' : 'Refresh'}:</b> {s.period}
                       </div>
@@ -222,7 +225,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                         <b>{language === 'mn' ? 'Хамрах хүрээ' : 'Coverage'}:</b> {language === 'mn' ? s.coverageMn : s.coverageEn}
                       </div>
                     </div>
-                    <p className="text-[11px] text-[#4B5563] bg-white/80 p-2 rounded border border-emerald-200/60">
+                    <p className="text-xs text-[#4B5563] bg-white/80 p-2 rounded border border-emerald-200/60">
                       <b>{language === 'mn' ? 'Тэмдэглэл' : 'Notes'}:</b> {language === 'mn' ? s.limitationsMn : s.limitationsEn}
                     </p>
                   </div>
@@ -230,7 +233,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
               </div>
 
               <div className="space-y-3">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#FF633C] block">
+                <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#FF633C] block">
                   {language === 'mn' ? '2. БАГЦЛАГДСАН ЖИШЭЭ БА ЗАГВАРЧИЛСАН ӨГӨГДӨЛ (DEMO / MODELLED)' : '2. BUNDLED DEMO & MODELLED DATASETS'}
                 </span>
                 {demoDatasets.map((s, idx) => (
@@ -239,14 +242,14 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                       <span className="font-bold text-sm text-[#0B124D]">
                         {language === 'mn' ? s.nameMn : s.nameEn}
                       </span>
-                      <span className="font-mono text-[10px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                      <span className="font-mono text-xs font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
                         ⚠ {language === 'mn' ? s.badgeMn : s.badgeEn}
                       </span>
                     </div>
                     <p className="text-[#0B124D] font-medium">
                       {language === 'mn' ? s.datasetMn : s.datasetEn}
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#72778A]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#72778A]">
                       <div>
                         <b>{language === 'mn' ? 'Хугацаа / Төрөл' : 'Scope'}:</b> {s.period}
                       </div>
@@ -254,7 +257,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                         <b>{language === 'mn' ? 'Хамрах хүрээ' : 'Coverage'}:</b> {language === 'mn' ? s.coverageMn : s.coverageEn}
                       </div>
                     </div>
-                    <p className="text-[11px] text-amber-900 bg-amber-50 p-2 rounded border border-amber-200">
+                    <p className="text-xs text-amber-900 bg-amber-50 p-2 rounded border border-amber-200">
                       <b>{language === 'mn' ? 'Хязгаарлалт' : 'Limitations'}:</b> {language === 'mn' ? s.limitationsMn : s.limitationsEn}
                     </p>
                   </div>
@@ -267,7 +270,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
           {activeTab === 'methodology' && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-[#0B124D] text-white space-y-2">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#FF633C] block">
+                <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#FF633C] block">
                   {language === 'mn' ? 'ОЛОН ХҮЧИН ЗҮЙЛИЙН ЭРСДЭЛИЙН ИНДЕКС (0–100)' : 'MULTI-CRITERIA RISK INDEX (0–100)'}
                 </span>
                 <p className="text-xs text-white/85 leading-relaxed">
@@ -282,7 +285,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                   <span className="font-bold text-[#0B124D] block">
                     {language === 'mn' ? 'Дүүргийн суурь жин (6 хүчин зүйл)' : 'District Weights (6 Factors)'}
                   </span>
-                  <ul className="space-y-1 text-[11px] text-[#4B5563] font-mono">
+                  <ul className="space-y-1 text-xs text-[#4B5563] font-mono">
                     <li>• Incident density: 30%</li>
                     <li>• Population density: 20%</li>
                     <li>• Station proximity: 15%</li>
@@ -296,7 +299,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                   <span className="font-bold text-[#0B124D] block">
                     {language === 'mn' ? 'Ангиллын босго (Нийт системд ижил)' : 'Shared Risk Thresholds'}
                   </span>
-                  <ul className="space-y-1 text-[11px] font-mono text-[#4B5563]">
+                  <ul className="space-y-1 text-xs font-mono text-[#4B5563]">
                     <li className="text-[#E93B2F] font-bold">• ≥ 75: {language === 'mn' ? 'Маш өндөр (very_high)' : 'Very High (very_high)'}</li>
                     <li className="text-[#FF633C] font-bold">• 55–74: {language === 'mn' ? 'Өндөр (high)' : 'High (high)'}</li>
                     <li className="text-amber-700 font-bold">• 35–54: {language === 'mn' ? 'Дунд (moderate)' : 'Moderate (moderate)'}</li>
@@ -309,7 +312,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                 <span className="font-bold text-[#0B124D] block">
                   {language === 'mn' ? 'Цаг агаарын галын индекс (FWI) ба хорооны загварчлал' : 'Fire Weather Index & Khoroo Synthesis'}
                 </span>
-                <p className="text-[11px] text-[#4B5563] leading-relaxed">
+                <p className="text-xs text-[#4B5563] leading-relaxed">
                   {language === 'mn'
                     ? `Цаг агаарын FWI нь гал авалцах эмзэгшил (62%) болон салхиар тархах эрчийг (38%) ялгаж тооцно. Бүртгэлгүй ${MODELLED_KHOROO_COUNT} хорооны оноо нь гэр өрхийн хувь (34%), замын нөхцөл (20%), гидрант (18%), хүрэх хугацаа (16%), хүн амаар (12%) бодогдож дүүргийн хүн амд жинлэсэн дундажтай уялддаг.`
                     : `FWI separates ignition receptivity (62%) from wind spread energy (38%). The ${MODELLED_KHOROO_COUNT} synthesized khoroos derive scores from ger share (34%), road access (20%), hydrant gap (18%), response delay (16%), and population (12%), anchored to their parent district score.`}
@@ -323,7 +326,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 bg-[#F7F8FA] rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Дүүргийн жишээ дуудлага' : 'Demo district call log'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#0B124D]">
@@ -331,28 +334,28 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
                   </span>
                 </div>
                 <div className="p-3 bg-[#F7F8FA] rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Дүрслэлийн бичлэг' : 'Sample incident rows'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#0B124D]">{SAMPLE_INCIDENT_COUNT}</span>
                 </div>
                 <div className="p-3 bg-[#F7F8FA] rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Загварчилсан хороо' : 'Modelled khoroos'}
                   </span>
                   <span className="font-mono text-lg font-bold text-[#FF633C]">
                     {modelledShare}%
                   </span>
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {MODELLED_KHOROO_COUNT}/{TOTAL_KHOROO_COUNT} {language === 'mn' ? 'хороо' : 'khoroos'}
                   </span>
                 </div>
                 <div className="p-3 bg-[#F7F8FA] rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {language === 'mn' ? 'Цаг агаарын шинэчлэл' : 'Weather refresh'}
                   </span>
                   <span className="font-mono text-xs font-bold text-[#0B124D]">{live.lastUpdated}</span>
-                  <span className="text-[10px] text-[#72778A] block">
+                  <span className="text-xs text-[#72778A] block">
                     {live.status === 'live'
                       ? `${live.provider} · LIVE`
                       : live.status === 'stale'
@@ -406,21 +409,31 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
           )}
 
           {/* TAB 5: Admin-Gated Data Management */}
-          {activeTab === 'admin' && <AdminDataGate language={language} />}
+          {activeTab === 'admin' && (
+            <Suspense
+              fallback={
+                <div className="p-6 text-center text-xs text-[#72778A] font-mono">
+                  {language === 'mn' ? 'Админ хэсгийг ачаалж байна…' : 'Loading admin tools…'}
+                </div>
+              }
+            >
+              <AdminDataGate language={language} />
+            </Suspense>
+          )}
 
         </div>
 
         {/* Footer */}
         <div className="pt-4 border-t border-[#0B124D]/10 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono text-[#72778A]">
+            <span className="text-xs font-mono text-[#72778A]">
               FireWatch UB Open Data Protocol
             </span>
             {!adminToken && activeTab !== 'admin' && (
               <button
                 type="button"
                 onClick={() => setActiveTab('admin')}
-                className="text-[11px] font-mono text-[#72778A] hover:text-[#0B124D] underline"
+                className="text-xs font-mono text-[#72778A] hover:text-[#0B124D] underline"
               >
                 {language === 'mn' ? 'Админ нэвтрэх' : 'Admin access'}
               </button>

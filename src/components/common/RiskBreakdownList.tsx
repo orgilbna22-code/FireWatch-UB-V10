@@ -1,10 +1,11 @@
 import React from 'react';
-import { DistrictData, KhorooData, Language } from '../../types';
+import { DistrictData, DistrictWeatherSnapshot, KhorooData, Language } from '../../types';
 import { roadAccessLabel } from '../../i18n/labels';
 
 interface RiskBreakdownListProps {
   district?: DistrictData | null;
   khoroo?: KhorooData | null;
+  districtWeather?: DistrictWeatherSnapshot | null;
   language: Language;
 }
 
@@ -19,6 +20,7 @@ const ROAD_PENALTY: Record<KhorooData['roadAccessibility'], number> = {
 export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
   district,
   khoroo,
+  districtWeather,
   language,
 }) => {
   if (!district && !khoroo) return null;
@@ -53,6 +55,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
     const respTime = khoroo.avgResponseTimeMin;
     const hydrants = khoroo.fireHydrantCount;
     const incidents = khoroo.historicalIncidents2024_2026;
+    const liveWeatherScore = districtWeather ? Math.round(districtWeather.fireWeatherIndex) : 52;
 
     // Standard raw factor weights for Khoroo
     // Weights sum to 1.0 (30%, 25%, 15%, 15%, 15%)
@@ -117,15 +120,19 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
       },
       {
         titleMn: 'Цахилгааны ачаалал & Цаг агаарын хуурайшилт',
-        titleEn: 'Electrical Load & Weather Factor',
-        rawScore: 65,
+        titleEn: 'Electrical Load & Live Weather Factor',
+        rawScore: liveWeatherScore,
         weight: 0.15,
-        reasonMn: 'Хүйтний улиралд нэмэлт цахилгаан халаагуур залгах, хуучин утас халах, хаврын хуурай салхины дэгдэлт.',
-        reasonEn: 'Supplemental heater overload, aging wire insulation, and arid seasonal winds.',
-        factMn: 'Өвлийн хүйтрэлт болон хаврын хуурайшилтын өдрүүдэд аюул 1.5 дахин өсдөг.',
-        factEn: 'Risk surges by 1.5x during subzero freezes and spring arid winds.',
-        kidElderSummaryMn: 'Олон залгуурыг нэг дор залгаж болохгүй. Утас халж гал гарах аюултай.',
-        kidElderSummaryEn: 'Do not plug many heaters into one outlet — the wiring heats up and can start a fire.',
+        reasonMn: 'Хүйтний улиралд цахилгаан халаагуур залгах, салхи ба ууршилтын даралтын зөрүү (VPD) өсөхөд галын тархалт нэмэгддэг.',
+        reasonEn: 'Heater overload combined with wind speed and vapor pressure deficit (VPD) accelerating ember spread.',
+        factMn: districtWeather
+          ? `Дүүргийн Open-Meteo FWI: ${districtWeather.fireWeatherIndex}/100 · Салхи ${districtWeather.windSpeedKmh} км/ц · Чийг ${districtWeather.humidityPercent}% (VPD ${districtWeather.vpdKpa} kPa)`
+          : 'Цаг агаарын шууд мэдээлэл түр холбогдоогүй (суурь жишиг FWI 52/100).',
+        factEn: districtWeather
+          ? `District Open-Meteo FWI: ${districtWeather.fireWeatherIndex}/100 · Wind ${districtWeather.windSpeedKmh} km/h · RH ${districtWeather.humidityPercent}% (VPD ${districtWeather.vpdKpa} kPa)`
+          : 'Live meteo unavailable — fallback seasonal FWI baseline 52/100.',
+        kidElderSummaryMn: 'Олон залгуурыг нэг дор бүү залгаарай; салхитай хуурай өдрүүдэд гадна ил гал, үнсээ бүрэн унтраана уу.',
+        kidElderSummaryEn: 'Never overload outlets with heaters, and secure all embers/ash completely on windy dry days.',
       },
     ];
 
@@ -217,7 +224,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
       */}
       <div className="bg-gradient-to-br from-[#0B124D] to-[#11166B] text-white p-5 rounded-2xl shadow-md border border-white/10">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF633C] font-bold">
+          <span className="text-xs font-mono uppercase tracking-widest text-[#FF633C] font-bold">
             {language === 'mn' ? 'НИЙЛМЭЛ ЭРСДЭЛИЙН ЗАДЛАЛ' : 'COMPOSITE RISK BREAKDOWN'}
           </span>
           <span className="px-2.5 py-0.5 rounded-full bg-[#FF633C] text-white text-xs font-mono font-bold">
@@ -282,7 +289,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
                   <span className="font-mono text-sm font-bold text-[#FF633C]">
                     +{r.percentContribution.toFixed(1)}
                   </span>
-                  <span className="text-[10px] text-[#72778A] block font-mono">
+                  <span className="text-xs text-[#72778A] block font-mono">
                     {language === 'mn' ? 'оноо' : 'pts'}
                   </span>
                 </div>
@@ -305,7 +312,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
               <div className="bg-[#FFF8F5] border border-orange-100 rounded-xl p-2.5 mb-2 text-xs text-[#8A3B14] flex items-start gap-2">
                 <span className="text-sm shrink-0">💡</span>
                 <div className="leading-snug">
-                  <span className="font-bold block text-[11px] text-[#0B124D]">
+                  <span className="font-bold block text-xs text-[#0B124D]">
                     {language === 'mn' ? 'Хүүхэд ба ахмадуудад ойлгомжтой санамж:' : 'Key takeaway:'}
                   </span>
                   <span>{language === 'mn' ? r.kidElderSummaryMn : r.kidElderSummaryEn}</span>
@@ -313,7 +320,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
               </div>
 
               {/* Row 4: Concrete Verified Fact */}
-              <div className={`px-2.5 py-1 rounded-xl border text-[11px] font-mono flex items-center gap-1.5 ${badgeBg}`}>
+              <div className={`px-2.5 py-1 rounded-xl border text-xs font-mono flex items-center gap-1.5 ${badgeBg}`}>
                 <span>📌</span>
                 <span>{language === 'mn' ? r.factMn : r.factEn}</span>
               </div>
@@ -333,7 +340,7 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
             <span className="font-bold text-[#0B124D] block">
               {language === 'mn' ? 'Математик баталгаажуулалт' : 'Mathematical Verification'}
             </span>
-            <span className="text-[11px] text-[#72778A]">
+            <span className="text-xs text-[#72778A]">
               {language === 'mn' ? 'Хүчин зүйлсийн жинлэсэн нийлбэр:' : 'Weighted factor sum:'}
             </span>
           </div>
@@ -342,14 +349,14 @@ export const RiskBreakdownList: React.FC<RiskBreakdownListProps> = ({
             <span className="font-mono text-lg font-bold text-[#0B124D]">
               {totalCalculatedPercent} / 100
             </span>
-            <span className="text-[10px] text-emerald-600 block font-bold font-mono">
+            <span className="text-xs text-emerald-600 block font-bold font-mono">
               {language === 'mn' ? '✓ Нийлбэр таарч байна' : '✓ Exact weighted sum'}
             </span>
           </div>
         </div>
 
         {/* Exact formula string */}
-        <div className="text-[11px] font-mono text-[#72778A] bg-white p-2.5 rounded-xl border border-black/[0.04] overflow-x-auto whitespace-nowrap">
+        <div className="text-xs font-mono text-[#72778A] bg-white p-2.5 rounded-xl border border-black/[0.04] overflow-x-auto whitespace-nowrap">
           {reasons.map((r) => `${r.percentContribution.toFixed(1)}`).join(' + ')} ={' '}
           <span className="font-bold text-[#FF633C]">{totalCalculatedPercent} / 100</span>
         </div>
